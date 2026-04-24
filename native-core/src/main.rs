@@ -7,6 +7,7 @@ mod video_pipeline;
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
+use opencv::prelude::MatTraitConst;
 
 use pipeline::Pipeline;
 use video_pipeline::VideoPipeline;
