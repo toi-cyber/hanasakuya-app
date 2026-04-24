@@ -23,12 +23,18 @@ impl VideoPipeline {
         conf_threshold: f64,
         model_path: &str,
     ) -> Result<Self, String> {
+        // OnnxInference をメインスレッドでロード（workerスレッド内でのCOM初期化問題を回避）
+        eprintln!("[video] Loading inference engine in main thread...");
+        let mut inference = OnnxInference::load(std::path::Path::new(model_path))
+            .map_err(|e| format!("Model load failed: {}", e))?;
+        inference.set_conf_threshold(conf_threshold);
+        eprintln!("[video] Inference engine ready, spawning worker thread");
+
         let running = Arc::new(AtomicBool::new(true));
         let running_clone = running.clone();
-        let model_path = model_path.to_string();
 
         thread::spawn(move || {
-            if let Err(e) = run_video_pipeline(&input_path, &output_path, conf_threshold, &model_path, &running_clone) {
+            if let Err(e) = run_video_pipeline(&input_path, &output_path, inference, &running_clone) {
                 send_event(&Event::VideoError { message: e });
             }
         });
@@ -44,36 +50,26 @@ impl VideoPipeline {
 fn run_video_pipeline(
     input_path: &str,
     output_path: &str,
-    conf_threshold: f64,
-    model_path: &str,
+    mut inference: OnnxInference,
     running: &AtomicBool,
 ) -> Result<(), String> {
     eprintln!("[video] Opening input: {}", input_path);
 
-    // 入力動画を開く（CAP_ANY で OpenCV に最適なバックエンドを選ばせる）
     let mut cap = open_video_capture(input_path)?;
-
-    if !cap.is_opened().unwrap_or(false) {
-        return Err(format!("Cannot open video file: {}", input_path));
-    }
 
     let fps_raw = cap.get(videoio::CAP_PROP_FPS).unwrap_or(0.0);
     let fps = if fps_raw > 0.0 { fps_raw } else { 30.0 };
     let width = cap.get(videoio::CAP_PROP_FRAME_WIDTH).unwrap_or(640.0) as i32;
     let height = cap.get(videoio::CAP_PROP_FRAME_HEIGHT).unwrap_or(480.0) as i32;
-
     let total_frames = cap.get(videoio::CAP_PROP_FRAME_COUNT).unwrap_or(0.0).max(0.0) as u64;
 
     eprintln!("[video] Input: {}x{} @ {:.1}fps, {} frames", width, height, fps, total_frames);
-
-    // 推論エンジンを先に初期化（失敗時に早期エラー）
-    let mut inference = OnnxInference::load(std::path::Path::new(model_path))?;
-    inference.set_conf_threshold(conf_threshold);
 
     // 出力VideoWriterを開く
     let frame_size = cv_core::Size::new(width, height);
     let (mut writer, actual_output_path) = open_video_writer(output_path, fps, frame_size)?;
 
+    eprintln!("[video] Starting frame loop");
     let start_time = Instant::now();
     let mut frame_num: u64 = 0;
 
@@ -86,10 +82,14 @@ fn run_video_pipeline(
         let mut frame = Mat::default();
         let ok = cap.read(&mut frame).unwrap_or(false);
         if !ok || frame.empty() {
+            eprintln!("[video] End of video at frame {}", frame_num);
             break;
         }
 
-        // 推論
+        if frame_num == 0 {
+            eprintln!("[video] First frame read OK");
+        }
+
         let input = CameraCapture::preprocess_for_inference(&frame, INPUT_SIZE)
             .unwrap_or_default();
 
@@ -109,8 +109,6 @@ fn run_video_pipeline(
             let rect = cv_core::Rect::new(x1, y1, (x2 - x1).max(1), (y2 - y1).max(1));
             let color = cv_core::Scalar::new(0.0, 255.0, 0.0, 255.0);
             imgproc::rectangle(&mut annotated, rect, color, 2, imgproc::LINE_8, 0).ok();
-
-            // 信頼度ラベル
             let label = format!("{:.0}%", b.confidence * 100.0);
             imgproc::put_text(
                 &mut annotated,
@@ -128,7 +126,6 @@ fn run_video_pipeline(
         writer.write(&annotated).map_err(|e| format!("Write frame failed: {}", e))?;
         frame_num += 1;
 
-        // 10フレームごとに進捗通知
         if frame_num % 10 == 0 {
             send_event(&Event::VideoProgress {
                 current_frame: frame_num,
@@ -148,11 +145,12 @@ fn run_video_pipeline(
 }
 
 fn open_video_capture(input_path: &str) -> Result<videoio::VideoCapture, String> {
+    // Windows: FFMPEG を優先（ファイル読み込みに最適・MSMF はハングの原因になる）
+    // macOS/Linux: CAP_ANY
     #[cfg(target_os = "windows")]
     let backends = &[
-        ("ANY",   videoio::CAP_ANY),
         ("FFMPEG", videoio::CAP_FFMPEG),
-        ("MSMF",  videoio::CAP_MSMF),
+        ("ANY",    videoio::CAP_ANY),
     ];
     #[cfg(not(target_os = "windows"))]
     let backends = &[
@@ -183,30 +181,33 @@ fn open_video_writer(
 
     #[cfg(target_os = "windows")]
     {
-        // Windows: XVID+AVI が最も確実。出力パスを .avi に変える
         let avi_path = {
             let p = std::path::Path::new(output_path);
             p.with_extension("avi").to_string_lossy().to_string()
         };
-        let fourcc = videoio::VideoWriter::fourcc('X', 'V', 'I', 'D').unwrap_or(-1);
-        eprintln!("[video] Windows: trying XVID -> {}", avi_path);
-        match videoio::VideoWriter::new(&avi_path, fourcc, fps, frame_size, true) {
-            Ok(w) if w.is_opened().unwrap_or(false) => {
-                eprintln!("[video] Writer opened with XVID (avi)");
-                return Ok((w, avi_path));
-            }
-            _ => eprintln!("[video] XVID failed"),
-        }
-        // MJPG でも試す
-        let fourcc = videoio::VideoWriter::fourcc('M', 'J', 'P', 'G').unwrap_or(-1);
+
+        // MJPG を先に試す（外部コーデック不要・COM 初期化不要）
+        let fourcc_mjpg = videoio::VideoWriter::fourcc('M', 'J', 'P', 'G').unwrap_or(-1);
         eprintln!("[video] Windows: trying MJPG -> {}", avi_path);
-        match videoio::VideoWriter::new(&avi_path, fourcc, fps, frame_size, true) {
+        match videoio::VideoWriter::new(&avi_path, fourcc_mjpg, fps, frame_size, true) {
             Ok(w) if w.is_opened().unwrap_or(false) => {
-                eprintln!("[video] Writer opened with MJPG (avi)");
+                eprintln!("[video] Writer opened with MJPG");
                 return Ok((w, avi_path));
             }
             _ => eprintln!("[video] MJPG failed"),
         }
+
+        // XVID にフォールバック
+        let fourcc_xvid = videoio::VideoWriter::fourcc('X', 'V', 'I', 'D').unwrap_or(-1);
+        eprintln!("[video] Windows: trying XVID -> {}", avi_path);
+        match videoio::VideoWriter::new(&avi_path, fourcc_xvid, fps, frame_size, true) {
+            Ok(w) if w.is_opened().unwrap_or(false) => {
+                eprintln!("[video] Writer opened with XVID");
+                return Ok((w, avi_path));
+            }
+            _ => eprintln!("[video] XVID failed"),
+        }
+
         return Err(format!("Failed to open video writer: {}", avi_path));
     }
 
