@@ -16,7 +16,8 @@ export default function DetectionScreen() {
     if (core.ready) {
       // Windows でカメラ許可ダイアログを出してから列挙
       window.coreApi.requestCameraPermission().finally(() => {
-        core.listCameras();
+        // カメラ開放を待ってから OpenCV で列挙（Windows でカメラが即座に解放されない場合がある）
+        setTimeout(() => core.listCameras(), 500);
       });
     }
   }, [core.ready]);
@@ -434,8 +435,15 @@ function VideoPanel({ core, settings, dark, t }: {
   dark: boolean;
   t: Record<string, any>;
 }) {
-  const { video, pickInputVideo, pickOutputPath, startVideoProcessing, stopVideoProcessing } = core;
+  const { video, logs, pickInputVideo, pickOutputPath, startVideoProcessing, stopVideoProcessing } = core;
   const progress = video.totalFrames > 0 ? video.currentFrame / video.totalFrames : 0;
+  const logRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [logs]);
 
   const pathStyle: React.CSSProperties = {
     flex: 1,
@@ -534,6 +542,21 @@ function VideoPanel({ core, settings, dark, t }: {
           </button>
         )}
       </div>
+
+      {/* デバッグログ */}
+      {logs.length > 0 && (
+        <div className="w-full max-w-lg">
+          <div className={`text-xs mb-1 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>ログ</div>
+          <div
+            ref={logRef}
+            className={`h-32 overflow-y-auto rounded-md p-2 font-mono text-[10px] leading-relaxed ${dark ? 'bg-black/60 text-gray-300' : 'bg-gray-100 text-gray-700'}`}
+          >
+            {logs.map((line, i) => (
+              <div key={i} className={line.includes('error') || line.includes('Error') || line.includes('failed') || line.includes('Failed') ? 'text-red-400' : ''}>{line}</div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

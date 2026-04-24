@@ -50,14 +50,8 @@ fn run_video_pipeline(
 ) -> Result<(), String> {
     eprintln!("[video] Opening input: {}", input_path);
 
-    // 入力動画を開く（WindowsではFFMPEGバックエンドを優先）
-    #[cfg(target_os = "windows")]
-    let video_backend = videoio::CAP_FFMPEG;
-    #[cfg(not(target_os = "windows"))]
-    let video_backend = videoio::CAP_ANY;
-
-    let mut cap = videoio::VideoCapture::from_file(input_path, video_backend)
-        .map_err(|e| format!("Failed to open video: {}", e))?;
+    // 入力動画を開く（CAP_ANY で OpenCV に最適なバックエンドを選ばせる）
+    let mut cap = open_video_capture(input_path)?;
 
     if !cap.is_opened().unwrap_or(false) {
         return Err(format!("Cannot open video file: {}", input_path));
@@ -72,13 +66,13 @@ fn run_video_pipeline(
 
     eprintln!("[video] Input: {}x{} @ {:.1}fps, {} frames", width, height, fps, total_frames);
 
+    // 推論エンジンを先に初期化（失敗時に早期エラー）
+    let mut inference = OnnxInference::load(std::path::Path::new(model_path))?;
+    inference.set_conf_threshold(conf_threshold);
+
     // 出力VideoWriterを開く
     let frame_size = cv_core::Size::new(width, height);
     let (mut writer, actual_output_path) = open_video_writer(output_path, fps, frame_size)?;
-
-    // 推論エンジン初期化
-    let mut inference = OnnxInference::load(std::path::Path::new(model_path))?;
-    inference.set_conf_threshold(conf_threshold);
 
     let start_time = Instant::now();
     let mut frame_num: u64 = 0;
@@ -151,6 +145,33 @@ fn run_video_pipeline(
     });
 
     Ok(())
+}
+
+fn open_video_capture(input_path: &str) -> Result<videoio::VideoCapture, String> {
+    #[cfg(target_os = "windows")]
+    let backends = &[
+        ("ANY",   videoio::CAP_ANY),
+        ("FFMPEG", videoio::CAP_FFMPEG),
+        ("MSMF",  videoio::CAP_MSMF),
+    ];
+    #[cfg(not(target_os = "windows"))]
+    let backends = &[
+        ("ANY", videoio::CAP_ANY),
+    ];
+
+    for (name, backend) in backends.iter() {
+        eprintln!("[video] Trying backend {} for: {}", name, input_path);
+        match videoio::VideoCapture::from_file(input_path, *backend) {
+            Ok(cap) if cap.is_opened().unwrap_or(false) => {
+                eprintln!("[video] Opened with backend {}", name);
+                return Ok(cap);
+            }
+            Ok(_) => eprintln!("[video] Backend {} opened but not ready", name),
+            Err(e) => eprintln!("[video] Backend {} error: {}", name, e),
+        }
+    }
+
+    Err(format!("Cannot open video file: {}", input_path))
 }
 
 fn open_video_writer(

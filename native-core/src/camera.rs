@@ -10,8 +10,8 @@ pub fn list_cameras() -> Vec<CameraInfo> {
 
     #[cfg(target_os = "windows")]
     let backends = &[
-        ("MSMF", videoio::CAP_MSMF),
         ("DSHOW", videoio::CAP_DSHOW),
+        ("MSMF", videoio::CAP_MSMF),
     ];
     #[cfg(not(target_os = "windows"))]
     let backends = &[
@@ -61,7 +61,7 @@ impl CameraCapture {
     /// カメラを開く
     pub fn open(device_id: i32) -> Result<Self, String> {
         #[cfg(target_os = "windows")]
-        let backends = &[videoio::CAP_MSMF, videoio::CAP_DSHOW];
+        let backends = &[videoio::CAP_DSHOW, videoio::CAP_MSMF];
         #[cfg(not(target_os = "windows"))]
         let backends = &[videoio::CAP_ANY];
 

@@ -53,8 +53,10 @@ export class CoreProcess {
       }
     });
 
-    this.process.stderr?.on('data', (data: Buffer) => {
-      console.error('[CoreProcess stderr]', data.toString());
+    const stderrRl = readline.createInterface({ input: this.process.stderr! });
+    stderrRl.on('line', (line: string) => {
+      console.error('[CoreProcess stderr]', line);
+      this.listeners.forEach((cb) => cb({ event: 'log', message: line }));
     });
 
     this.process.on('exit', (code) => {

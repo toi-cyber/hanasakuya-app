@@ -49,6 +49,7 @@ interface CoreState {
   error: string | null;
   video: VideoState;
   update: UpdateState;
+  logs: string[];
 }
 
 const initialVideoState: VideoState = {
@@ -70,6 +71,7 @@ export function useNativeCore() {
     error: null,
     video: initialVideoState,
     update: { status: 'idle' },
+    logs: [],
   });
 
   useEffect(() => {
@@ -144,6 +146,12 @@ export function useNativeCore() {
               percent: event.percent,
               message: event.message,
             },
+          }));
+          break;
+        case 'log':
+          setState((s) => ({
+            ...s,
+            logs: [...s.logs.slice(-199), event.message as string],
           }));
           break;
       }
