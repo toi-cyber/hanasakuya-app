@@ -1,7 +1,7 @@
 {
   "name": "oocyte-desktop-app",
   "productName": "Hanasakuya Detection",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Real-time oocyte detection using YOLOv8",
   "main": ".vite/build/main.js",
   "private": true,
