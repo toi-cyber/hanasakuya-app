@@ -80,6 +80,9 @@ export function useNativeCore() {
   const streamRef = useRef<MediaStream | null>(null);
   const detectingRef = useRef(false);
   const fpsRef = useRef({ frames: 0, lastTime: Date.now(), fps: 0 });
+  // 設定 refs（captureFrame クロージャから参照）
+  const jpegQualityRef = useRef(0.6);  // 0.0–1.0
+  const inferSizeRef = useRef(640);    // 320 or 640
 
   // フレームを canvas → JPEG → Rust へ送信
   const captureFrame = useCallback(() => {
@@ -91,7 +94,7 @@ export function useNativeCore() {
       return;
     }
 
-    const maxWidth = 640;
+    const maxWidth = inferSizeRef.current;
     const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
     canvas.width = Math.round((video.videoWidth || maxWidth) * scale);
     canvas.height = Math.round((video.videoHeight || 480) * scale);
@@ -100,7 +103,7 @@ export function useNativeCore() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    const jpeg_base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+    const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
     window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
   }, []);
 
@@ -263,6 +266,14 @@ export function useNativeCore() {
     window.coreApi.send({ cmd: 'set_threshold', value });
   }, []);
 
+  const setJpegQuality = useCallback((percent: number) => {
+    jpegQualityRef.current = percent / 100;
+  }, []);
+
+  const setInferSize = useCallback((size: number) => {
+    inferSizeRef.current = size;
+  }, []);
+
   const pickInputVideo = useCallback(async () => {
     const path = await window.coreApi.openVideoDialog();
     if (path) {
@@ -318,6 +329,8 @@ export function useNativeCore() {
     startDetection,
     stopDetection,
     setThreshold,
+    setJpegQuality,
+    setInferSize,
     pickInputVideo,
     pickOutputPath,
     startVideoProcessing,

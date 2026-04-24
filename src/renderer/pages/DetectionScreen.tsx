@@ -43,10 +43,10 @@ export default function DetectionScreen() {
       core.setThreshold((value as number) / 100);
     }
     if (key === 'jpegQuality') {
-      window.coreApi.send({ cmd: 'set_jpeg_quality', value });
+      core.setJpegQuality(value as number);
     }
-    if (key === 'displayResolution') {
-      window.coreApi.send({ cmd: 'set_display_resolution', value });
+    if (key === 'inputSize') {
+      core.setInferSize(value as number);
     }
   };
 
@@ -279,18 +279,6 @@ export default function DetectionScreen() {
               <div className={`flex justify-between text-[10px] ${t.rangeHint} mt-0.5`}>
                 <span>高速</span><span>高画質</span>
               </div>
-            </Label>
-            <Label text="表示解像度" dark={dark}>
-              <select
-                value={settings.displayResolution}
-                onChange={(e) => applySettings('displayResolution', parseInt(e.target.value))}
-                style={t.selectStyle}
-              >
-                <option value={640}>640px (高速)</option>
-                <option value={960}>960px (標準)</option>
-                <option value={1280}>1280px (高画質)</option>
-                <option value={1920}>1920px (フル)</option>
-              </select>
             </Label>
             <Label text="テーマ" dark={dark}>
               <div className="flex gap-2">
