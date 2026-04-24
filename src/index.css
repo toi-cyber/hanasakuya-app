@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sakura-50: #fef6f9;
+  --color-sakura-100: #fce7f0;
+  --color-sakura-200: #facee3;
+  --color-sakura-300: #f8a5ce;
+  --color-sakura-400: #f472b6;
+  --color-sakura-500: #ec4899;
+  --color-sakura-600: #db2777;
+  --color-sakura-700: #be185d;
+  --color-sakura-800: #9f1239;
+  --color-sakura-900: #831843;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #ffffff;
+  color: #1a1a2e;
+  overflow: hidden;
+}

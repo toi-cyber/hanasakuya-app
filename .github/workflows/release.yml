@@ -1,0 +1,125 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            native-core/target
+          key: windows-rust-${{ hashFiles('native-core/Cargo.lock') }}
+          restore-keys: windows-rust-
+
+      - name: Install LLVM
+        run: choco install llvm -y
+
+      - name: Download OpenCV (Windows)
+        shell: pwsh
+        run: |
+          $ver = (Get-ChildItem "C:\tools\opencv\build\x64" -ErrorAction SilentlyContinue | Select-Object -First 1)
+          if (-not $ver) {
+            Invoke-WebRequest "https://github.com/opencv/opencv/releases/download/4.11.0/opencv-4.11.0-windows.exe" -OutFile opencv.exe
+            Start-Process -FilePath ".\opencv.exe" -ArgumentList "-oC:\tools\", "-y" -Wait -NoNewWindow
+          }
+          Get-ChildItem "C:\tools\opencv\build\x64" -ErrorAction SilentlyContinue
+
+      - name: Download ONNX Runtime (Windows)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip" -OutFile ort.zip
+          Expand-Archive ort.zip -DestinationPath ort
+          New-Item -ItemType Directory -Force -Path resources\lib
+          Copy-Item ort\onnxruntime-win-x64-1.20.1\lib\onnxruntime.dll resources\lib\
+
+      - name: Build Rust core
+        shell: cmd
+        run: |
+          cd native-core
+          cargo build --release
+        env:
+          OPENCV_INCLUDE_PATHS: C:\tools\opencv\build\include
+          OPENCV_LINK_LIBS: opencv_world4110
+          OPENCV_LINK_PATHS: C:\tools\opencv\build\x64\vc16\lib
+          LIBCLANG_PATH: C:\Program Files\LLVM\bin
+
+      - name: Install npm dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Make
+        run: npx electron-forge make
+        env:
+          npm_lifecycle_event: make
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: out/make/squirrel.windows/x64/*.exe
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+          path: dist/windows
+
+      - name: Get version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Generate latest.yml (Windows)
+        run: |
+          EXE=$(ls dist/windows/*.exe | head -1)
+          FILENAME=$(basename "$EXE")
+          SIZE=$(stat -c%s "$EXE")
+          SHA512=$(sha512sum "$EXE" | awk '{print $1}' | xxd -r -p | base64 -w0)
+          cat > dist/latest.yml <<EOF
+          version: ${{ env.VERSION }}
+          files:
+            - url: ${FILENAME}
+              sha512: ${SHA512}
+              size: ${SIZE}
+          path: ${FILENAME}
+          sha512: ${SHA512}
+          releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          gh release delete ${{ github.ref_name }} \
+            --repo toi-cyber/hanasakuya-releases \
+            --yes 2>/dev/null || true
+          gh release create ${{ github.ref_name }} \
+            dist/windows/*.exe \
+            dist/latest.yml \
+            --repo toi-cyber/hanasakuya-releases \
+            --title "${{ github.ref_name }}" \
+            --generate-notes

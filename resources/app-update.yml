@@ -1,0 +1,4 @@
+provider: github
+owner: toi-cyber
+repo: hanasakuya-releases
+updaterCacheDirName: hanasakuya-detection-updater
