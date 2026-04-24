@@ -83,16 +83,18 @@ export function useNativeCore() {
   // 設定 refs（captureFrame クロージャから参照）
   const jpegQualityRef = useRef(0.6);  // 0.0–1.0
   const inferSizeRef = useRef(640);    // 320 or 640
+  // 推論中フラグ（フレームの多重送信を防ぐ）
+  const inferPendingRef = useRef(false);
+  const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // フレームを canvas → JPEG → Rust へ送信
+  // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
   const captureFrame = useCallback(() => {
     if (!detectingRef.current) return;
+    if (inferPendingRef.current) return; // 推論中はスキップ
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    if (!video || !canvas || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      setTimeout(captureFrame, 50);
-      return;
-    }
+    if (!video || !canvas || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
     const maxWidth = inferSizeRef.current;
     const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
@@ -104,6 +106,9 @@ export function useNativeCore() {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
+    if (!jpeg_base64) return;
+
+    inferPendingRef.current = true;
     window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
   }, []);
 
@@ -117,6 +122,8 @@ export function useNativeCore() {
           // Rust 側カメラ列挙は使わない（互換性のため残す）
           break;
         case 'detection': {
+          // 推論完了 → 次フレーム送信可能
+          inferPendingRef.current = false;
           // FPS をレンダラー側で計算
           const c = fpsRef.current;
           c.frames++;
@@ -137,8 +144,6 @@ export function useNativeCore() {
               frameJpeg: event.frame_jpeg || null,
             },
           }));
-          // 推論完了 → 次フレームをキャプチャ（推論速度でペーシング）
-          captureFrame();
           break;
         }
         case 'stopped':
@@ -229,6 +234,7 @@ export function useNativeCore() {
   /** レンダラー getUserMedia でカメラを開く */
   const startDetection = useCallback(async (deviceId: string) => {
     detectingRef.current = true;
+    inferPendingRef.current = false;
     fpsRef.current = { frames: 0, lastTime: Date.now(), fps: 0 };
     try {
       const constraints: MediaStreamConstraints = {
@@ -243,7 +249,10 @@ export function useNativeCore() {
       }
 
       setState((s) => ({ ...s, detecting: true, error: null }));
-      setTimeout(captureFrame, 200);
+
+      // 100ms ごとにフレームを送る（推論中はスキップするので多重送信なし）
+      if (captureIntervalRef.current) clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = setInterval(captureFrame, 100);
     } catch (e) {
       detectingRef.current = false;
       setState((s) => ({ ...s, error: `カメラエラー: ${e}`, detecting: false }));
@@ -252,6 +261,11 @@ export function useNativeCore() {
 
   const stopDetection = useCallback(() => {
     detectingRef.current = false;
+    inferPendingRef.current = false;
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;

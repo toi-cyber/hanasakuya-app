@@ -308,8 +308,35 @@ export default function DetectionScreen() {
             </Label>
           </Section>
         </div>
+
+        {/* デバッグログ（設定サイドバー下部） */}
+        {core.logs.length > 0 && (
+          <LogPanel logs={core.logs} dark={dark} />
+        )}
       </div>
 
+    </div>
+  );
+}
+
+function LogPanel({ logs, dark }: { logs: string[]; dark: boolean }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
+  }, [logs]);
+  return (
+    <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-200'} p-2`}>
+      <div className={`text-[9px] mb-1 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>ログ</div>
+      <div
+        ref={ref}
+        className={`h-28 overflow-y-auto font-mono text-[9px] leading-relaxed ${dark ? 'text-gray-400' : 'text-gray-600'}`}
+      >
+        {logs.map((line, i) => (
+          <div key={i} className={line.includes('error') || line.includes('Error') || line.includes('failed') || line.includes('Failed') ? 'text-red-400' : ''}>
+            {line}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
