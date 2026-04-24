@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 interface Camera {
-  id: number;
+  id: string;
   name: string;
 }
 
@@ -9,7 +9,7 @@ type Theme = 'light' | 'dark';
 
 interface Settings {
   // カメラ
-  cameraId: number;
+  cameraId: string;
   // 検出
   confidenceThreshold: number;
   // モデル
@@ -29,7 +29,7 @@ interface SettingsModalProps {
 }
 
 const DEFAULT_SETTINGS: Settings = {
-  cameraId: 0,
+  cameraId: '',
   confidenceThreshold: 30,
   inputSize: 640,
   jpegQuality: 60,
@@ -79,7 +79,7 @@ export default function SettingsModal({
             <Label text="デバイス">
               <select
                 value={settings.cameraId}
-                onChange={(e) => update('cameraId', parseInt(e.target.value))}
+                onChange={(e) => update('cameraId', e.target.value)}
                 className="input-field"
               >
                 {cameras.length > 0 ? (

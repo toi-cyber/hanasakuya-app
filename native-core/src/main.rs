@@ -31,6 +31,9 @@ enum Command {
     ProcessVideo { input_path: String, output_path: String, conf_threshold: f64 },
     #[serde(rename = "stop_video")]
     StopVideo,
+    /// レンダラー側でキャプチャしたフレームをJPEG base64で受け取り推論
+    #[serde(rename = "infer_frame")]
+    InferFrame { jpeg_base64: String },
 }
 
 /// Core → UI イベント
@@ -100,6 +103,7 @@ fn main() {
 
     let mut current_pipeline: Option<Pipeline> = None;
     let mut current_video: Option<VideoPipeline> = None;
+    let mut current_inference: Option<inference::OnnxInference> = None;
     let pipeline_settings = std::sync::Arc::new(pipeline::PipelineSettings::new());
 
     // モデルパスを特定（実行ファイルと同階層 or resources/）
@@ -188,8 +192,72 @@ fn main() {
             Command::StopVideo => {
                 if let Some(v) = current_video.take() { v.stop(); }
             }
+            Command::InferFrame { jpeg_base64 } => {
+                let path = match &model_path {
+                    Some(p) => p.clone(),
+                    None => {
+                        send_event(&Event::Error { message: "Model file not found".to_string() });
+                        continue;
+                    }
+                };
+                // 初回のみモデルをロード（以降は使い回す）
+                if current_inference.is_none() {
+                    eprintln!("[main] Loading inference engine for renderer-driven mode...");
+                    match inference::OnnxInference::load(std::path::Path::new(&path)) {
+                        Ok(inf) => {
+                            eprintln!("[main] Inference engine ready");
+                            current_inference = Some(inf);
+                        }
+                        Err(e) => {
+                            send_event(&Event::Error { message: format!("Model load failed: {}", e) });
+                            continue;
+                        }
+                    }
+                }
+                if let Some(inf) = &mut current_inference {
+                    let conf = pipeline_settings.conf_threshold_x100.load(std::sync::atomic::Ordering::Relaxed) as f64 / 100.0;
+                    inf.set_conf_threshold(conf);
+                    match infer_jpeg_frame(&jpeg_base64, inf) {
+                        Ok((boxes, inference_ms)) => {
+                            let count = boxes.len();
+                            send_event(&Event::Detection {
+                                boxes,
+                                count,
+                                inference_ms,
+                                fps: 0.0, // FPS はレンダラー側で計算
+                                frame_jpeg: None,
+                            });
+                        }
+                        Err(e) => send_event(&Event::Error { message: e }),
+                    }
+                }
+            }
         }
     }
+}
+
+/// レンダラーから受け取った JPEG base64 フレームを推論
+fn infer_jpeg_frame(
+    jpeg_base64: &str,
+    inference: &mut inference::OnnxInference,
+) -> Result<(Vec<DetectionBox>, u64), String> {
+    use base64::Engine;
+    use opencv::{core::Vector, imgcodecs};
+
+    let jpeg_bytes = base64::engine::general_purpose::STANDARD
+        .decode(jpeg_base64)
+        .map_err(|e| format!("Base64 decode failed: {}", e))?;
+
+    let buf = Vector::from_slice(&jpeg_bytes);
+    let frame = imgcodecs::imdecode(&buf, imgcodecs::IMREAD_COLOR)
+        .map_err(|e| format!("JPEG decode failed: {}", e))?;
+
+    if frame.empty() {
+        return Err("Decoded frame is empty".to_string());
+    }
+
+    let input = camera::CameraCapture::preprocess_for_inference(&frame, inference::INPUT_SIZE)?;
+    inference.run(&input)
 }
 
 /// ONNXモデルファイルを探す

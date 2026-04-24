@@ -14,24 +14,21 @@ export default function DetectionScreen() {
 
   useEffect(() => {
     if (core.ready) {
-      // Windows でカメラ許可ダイアログを出してから列挙
-      window.coreApi.requestCameraPermission().finally(() => {
-        // カメラ開放を待ってから OpenCV で列挙（Windows でカメラが即座に解放されない場合がある）
-        setTimeout(() => core.listCameras(), 500);
-      });
+      core.listCameras();
     }
   }, [core.ready]);
 
+  // detecting 状態に合わせて started を同期
+  useEffect(() => {
+    setStarted(core.detecting);
+  }, [core.detecting]);
+
   const handleStart = () => {
-    if (core.cameras.length > 0) {
-      core.startDetection(settings.cameraId);
-      setStarted(true);
-    }
+    core.startDetection(settings.cameraId);
   };
 
   const handleStop = () => {
     core.stopDetection();
-    setStarted(false);
   };
 
   const applySettings = (key: keyof Settings, value: number | string) => {
@@ -40,7 +37,7 @@ export default function DetectionScreen() {
 
     if (key === 'cameraId' && started) {
       core.stopDetection();
-      core.startDetection(value as number);
+      core.startDetection(value as string);
     }
     if (key === 'confidenceThreshold') {
       core.setThreshold((value as number) / 100);
@@ -160,21 +157,20 @@ export default function DetectionScreen() {
           </div>
         ) : (
           <>
-            {frameJpeg ? (
-              <img
-                src={`data:image/jpeg;base64,${frameJpeg}`}
-                alt="camera"
-                className="absolute inset-0 w-full h-full object-cover"
-                onLoad={(e) => {
-                  const img = e.target as HTMLImageElement;
-                  setImageSize({ width: img.naturalWidth, height: img.naturalHeight });
-                }}
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-10 h-10 rounded-full border-4 border-sakura-200 border-t-sakura-500 animate-spin" />
-              </div>
-            )}
+            {/* ライブカメラ映像（getUserMedia から直接表示） */}
+            <video
+              ref={core.videoRef}
+              autoPlay
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover"
+              onLoadedMetadata={(e) => {
+                const v = e.target as HTMLVideoElement;
+                setImageSize({ width: v.videoWidth, height: v.videoHeight });
+              }}
+            />
+            {/* 推論用（非表示）canvas */}
+            <canvas ref={core.canvasRef} style={{ display: 'none' }} />
             {detection && detection.boxes.length > 0 && (
               <DetectionOverlay
                 boxes={detection.boxes}
@@ -226,7 +222,7 @@ export default function DetectionScreen() {
             <Label text="デバイス" dark={dark}>
               <select
                 value={settings.cameraId}
-                onChange={(e) => applySettings('cameraId', parseInt(e.target.value))}
+                onChange={(e) => applySettings('cameraId', e.target.value)}
                 style={t.selectStyle}
               >
                 {core.cameras.length > 0 ? (
