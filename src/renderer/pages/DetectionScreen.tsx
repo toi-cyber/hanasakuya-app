@@ -139,10 +139,26 @@ export default function DetectionScreen() {
 
         {/* Camera tab */}
         <div className={`flex-1 relative ${activeTab !== 'camera' ? 'hidden' : ''}`}>
-        {!started ? (
+        {/* video/canvas は常時 DOM に置く（startDetection 時点で ref が必要） */}
+        <video
+          ref={core.videoRef}
+          autoPlay
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ display: started ? 'block' : 'none' }}
+          onLoadedMetadata={(e) => {
+            const v = e.target as HTMLVideoElement;
+            setImageSize({ width: v.videoWidth, height: v.videoHeight });
+          }}
+        />
+        <canvas ref={core.canvasRef} style={{ display: 'none' }} />
+
+        {/* 待機画面 */}
+        {!started && (
           <div className={`absolute inset-0 flex flex-col items-center justify-center ${t.waitBg}`}>
             <div className="w-20 h-20 rounded-full bg-sakura-500 opacity-80 mb-6" />
-<p className={`${t.sub} text-sm mb-8`}>
+            <p className={`${t.sub} text-sm mb-8`}>
               {core.ready
                 ? `${core.cameras.length} 台のカメラを検出`
                 : 'コア起動中...'}
@@ -155,22 +171,11 @@ export default function DetectionScreen() {
               検出を開始
             </button>
           </div>
-        ) : (
+        )}
+
+        {/* 検出中オーバーレイ */}
+        {started && (
           <>
-            {/* ライブカメラ映像（getUserMedia から直接表示） */}
-            <video
-              ref={core.videoRef}
-              autoPlay
-              muted
-              playsInline
-              className="absolute inset-0 w-full h-full object-cover"
-              onLoadedMetadata={(e) => {
-                const v = e.target as HTMLVideoElement;
-                setImageSize({ width: v.videoWidth, height: v.videoHeight });
-              }}
-            />
-            {/* 推論用（非表示）canvas */}
-            <canvas ref={core.canvasRef} style={{ display: 'none' }} />
             {detection && detection.boxes.length > 0 && (
               <DetectionOverlay
                 boxes={detection.boxes}
@@ -178,14 +183,11 @@ export default function DetectionScreen() {
                 height={imageSize.height}
               />
             )}
-
-            {/* Stats */}
             <div className="absolute top-4 right-4 flex flex-col gap-2">
               <StatChip label="検出" value={`${detection?.count ?? 0}`} highlight dark={dark} />
               <StatChip label="推論" value={`${detection?.inferenceMs ?? 0}ms`} dark={dark} />
               <StatChip label="FPS" value={`${(detection?.fps ?? 0).toFixed(1)}`} dark={dark} />
             </div>
-
             <button
               onClick={handleStop}
               className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-sakura-500 hover:bg-sakura-600 text-white rounded-lg px-6 py-2 text-sm font-medium transition-colors"
