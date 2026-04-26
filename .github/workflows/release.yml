@@ -62,6 +62,12 @@ jobs:
           OPENCV_LINK_PATHS: C:\tools\opencv\build\x64\vc16\lib
           LIBCLANG_PATH: C:\Program Files\LLVM\bin
 
+      - name: Copy OpenCV runtime DLLs (Windows)
+        shell: pwsh
+        run: |
+          Copy-Item C:\tools\opencv\build\x64\vc16\bin\opencv_world4110.dll native-core\target\release\
+          Copy-Item C:\tools\opencv\build\x64\vc16\bin\opencv_videoio_ffmpeg4110_64.dll native-core\target\release\
+
       - name: Install npm dependencies
         run: npm install --legacy-peer-deps
 

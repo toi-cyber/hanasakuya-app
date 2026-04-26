@@ -11,7 +11,7 @@ import { FuseV1Options, FuseVersion } from '@electron/fuses';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
-    name: 'Hanasakuya Detection',
+    name: 'Hanasakuya',
     executableName: 'HanasakuyaDetection',
     extraResource: [
       process.platform === 'win32'
@@ -20,6 +20,12 @@ const config: ForgeConfig = {
       './resources/models',
       './resources/lib',
       './resources/app-update.yml',
+      ...(process.platform === 'win32'
+        ? [
+            './native-core/target/release/opencv_world4110.dll',
+            './native-core/target/release/opencv_videoio_ffmpeg4110_64.dll',
+          ]
+        : []),
     ],
   },
   rebuildConfig: {},
