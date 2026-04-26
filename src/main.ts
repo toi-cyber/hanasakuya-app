@@ -36,7 +36,7 @@ if (process.platform === 'win32') {
 const core = new CoreProcess();
 
 function setupAutoUpdater(mainWindow: BrowserWindow) {
-  autoUpdater.autoDownload = false;
+  autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
   autoUpdater.on('update-available', (info) => {
@@ -67,6 +67,10 @@ function setupAutoUpdater(mainWindow: BrowserWindow) {
       event: 'update',
       status: 'ready',
     });
+    setTimeout(() => {
+      core.stop();
+      autoUpdater.quitAndInstall();
+    }, 2000);
   });
 
   // 起動時にも自動チェック
