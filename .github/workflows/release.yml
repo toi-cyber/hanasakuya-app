@@ -46,10 +46,10 @@ jobs:
       - name: Download ONNX Runtime (Windows)
         shell: pwsh
         run: |
-          Invoke-WebRequest "https://github.com/microsoft/onnxruntime/releases/download/v1.20.1/onnxruntime-win-x64-1.20.1.zip" -OutFile ort.zip
+          Invoke-WebRequest "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip" -OutFile ort.zip
           Expand-Archive ort.zip -DestinationPath ort
           New-Item -ItemType Directory -Force -Path resources\lib
-          Copy-Item ort\onnxruntime-win-x64-1.20.1\lib\onnxruntime.dll resources\lib\
+          Copy-Item ort\onnxruntime-win-x64-1.24.2\lib\onnxruntime.dll resources\lib\
 
       - name: Build Rust core
         shell: cmd
