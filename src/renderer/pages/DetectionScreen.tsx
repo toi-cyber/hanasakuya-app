@@ -429,7 +429,8 @@ function UpdateButton({ update, onCheck, onDownload, onInstall, dark }: {
   dark: boolean;
 }) {
   const s = update.status;
-  const busy = s === 'checking' || s === 'downloading';
+  const [installing, setInstalling] = useState(false);
+  const busy = s === 'checking' || s === 'downloading' || installing;
   const [showPopup, setShowPopup] = useState(false);
 
   // 結果が出たらポップアップを表示
@@ -444,8 +445,9 @@ function UpdateButton({ update, onCheck, onDownload, onInstall, dark }: {
   }, [s]);
 
   const handleClick = () => {
+    if (installing) return;
     if (s === 'available') { onDownload(); setShowPopup(false); }
-    else if (s === 'ready') onInstall();
+    else if (s === 'ready') { setInstalling(true); onInstall(); }
     else if (!busy) { onCheck(); setShowPopup(false); }
   };
 
@@ -466,15 +468,17 @@ function UpdateButton({ update, onCheck, onDownload, onInstall, dark }: {
         disabled={busy}
         title={s === 'error' ? `エラー: ${update.message ?? ''}` : undefined}
         className={`w-9 h-9 rounded-full ${
-          s === 'available' || s === 'ready'
-            ? 'bg-sakura-500 hover:bg-sakura-600 text-white'
-            : dark
-              ? 'bg-[#2a2a2a] hover:bg-[#333]'
-              : 'bg-white hover:bg-gray-200'
-        } flex items-center justify-center transition-colors disabled:opacity-50`}
+          installing
+            ? 'bg-sakura-500 text-white'
+            : s === 'available' || s === 'ready'
+              ? 'bg-sakura-500 hover:bg-sakura-600 text-white'
+              : dark
+                ? 'bg-[#2a2a2a] hover:bg-[#333]'
+                : 'bg-white hover:bg-gray-200'
+        } flex items-center justify-center transition-colors disabled:opacity-80 disabled:cursor-wait`}
       >
         {busy ? (
-          <div className="w-4 h-4 rounded-full border-2 border-sakura-200 border-t-sakura-500 animate-spin" />
+          <div className={`w-4 h-4 rounded-full border-2 ${installing ? 'border-white/40 border-t-white' : 'border-sakura-200 border-t-sakura-500'} animate-spin`} />
         ) : (
           <svg viewBox="0 0 24 24" className={`w-5 h-5 ${s === 'available' || s === 'ready' ? 'text-white' : dark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" strokeWidth={1.5}>
             <path d="M12 4v12m0 0l-4-4m4 4l4-4" strokeLinecap="round" strokeLinejoin="round" />
@@ -484,7 +488,11 @@ function UpdateButton({ update, onCheck, onDownload, onInstall, dark }: {
       </button>
 
       {/* ステータステキスト */}
-      {(showPopup && popup) || s === 'downloading' ? (
+      {installing ? (
+        <span className="text-[9px] mt-0.5 text-center leading-tight text-sakura-500">
+          再起動中...
+        </span>
+      ) : (showPopup && popup) || s === 'downloading' ? (
         <span className={`text-[9px] mt-0.5 text-center leading-tight ${(popup || popupContent['downloading'])?.color}`}>
           {s === 'downloading' ? `${update.percent ?? 0}%` : popup?.text}
         </span>
