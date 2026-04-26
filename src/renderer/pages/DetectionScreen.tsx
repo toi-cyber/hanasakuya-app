@@ -8,6 +8,7 @@ export default function DetectionScreen() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [started, setStarted] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'video'>('camera');
+  const [menuCollapsed, setMenuCollapsed] = useState(false);
   const core = useNativeCore();
 
   const dark = settings.theme === 'dark';
@@ -92,50 +93,65 @@ export default function DetectionScreen() {
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      {/* Left sidebar */}
-      <div className={`w-20 shrink-0 flex flex-col items-center ${dark ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`}>
+      {/* Left drawer */}
+      <div className={`${menuCollapsed ? 'w-14' : 'w-56'} shrink-0 ${t.drawerBg} border-r ${t.drawerBorder} flex flex-col transition-all duration-200`}>
         {/* Space for traffic lights */}
         <div className="h-8 w-full shrink-0" />
+        <div className={`${menuCollapsed ? 'px-0 justify-center' : 'px-5 justify-between'} py-4 border-b ${t.drawerHeaderBorder} flex items-center`}>
+          {!menuCollapsed && <h2 className={`text-base font-bold ${t.drawerTitle}`}>メニュー</h2>}
+          <button
+            onClick={() => setMenuCollapsed((v) => !v)}
+            title={menuCollapsed ? 'メニューを展開' : 'メニューを折りたたむ'}
+            className={`${dark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'} transition-colors`}
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <nav className="flex flex-col py-2">
+          <MenuItem
+            icon={<CameraIcon />}
+            label="カメラ検出"
+            active={activeTab === 'camera'}
+            onClick={() => setActiveTab('camera')}
+            collapsed={menuCollapsed}
+            dark={dark}
+          />
+          <MenuItem
+            icon={<VideoIcon />}
+            label="動画処理"
+            active={activeTab === 'video'}
+            onClick={() => setActiveTab('video')}
+            collapsed={menuCollapsed}
+            dark={dark}
+          />
+        </nav>
         <div className="flex-1" />
         {/* Update button */}
-        <UpdateButton
-          update={core.update}
-          onCheck={core.checkForUpdate}
-          onDownload={core.downloadUpdate}
-          onInstall={core.installUpdate}
-          dark={dark}
-        />
-        {/* Version */}
-        <div className={`mb-3 text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none`}>
-          v{APP_VERSION}
+        <div className="flex flex-col items-center pb-3">
+          <UpdateButton
+            update={core.update}
+            onCheck={core.checkForUpdate}
+            onDownload={core.downloadUpdate}
+            onInstall={core.installUpdate}
+            dark={dark}
+          />
+          {/* Version */}
+          {!menuCollapsed && (
+            <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none`}>
+              v{APP_VERSION}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main area */}
       <div className="flex-1 relative flex flex-col">
-        {/* Tab bar */}
-        <div className={`flex shrink-0 border-b ${t.drawerBorder} ${dark ? 'bg-[#1a1a1a]' : 'bg-gray-100'}`} style={{ marginTop: '32px' }}>
-          <button
-            onClick={() => setActiveTab('camera')}
-            className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'camera'
-                ? 'border-sakura-500 text-sakura-500'
-                : `border-transparent ${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`
-            }`}
-          >
-            カメラ検出
-          </button>
-          <button
-            onClick={() => setActiveTab('video')}
-            className={`px-5 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === 'video'
-                ? 'border-sakura-500 text-sakura-500'
-                : `border-transparent ${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`
-            }`}
-          >
-            動画処理
-          </button>
-        </div>
+        {/* Top spacer for traffic light region */}
+        <div className="h-8 shrink-0" />
 
         {/* Camera tab */}
         <div className={`flex-1 relative ${activeTab !== 'camera' ? 'hidden' : ''}`}>
@@ -338,6 +354,41 @@ function LogPanel({ logs, dark }: { logs: string[]; dark: boolean }) {
         ))}
       </div>
     </div>
+  );
+}
+
+function MenuItem({ icon, label, active, onClick, collapsed, dark }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean; dark: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      className={`flex items-center ${collapsed ? 'justify-center px-0' : 'px-5'} py-2.5 text-sm font-medium text-left border-l-4 transition-colors ${
+        active
+          ? 'border-sakura-500 text-sakura-500 bg-sakura-500/10'
+          : `border-transparent ${dark ? 'text-gray-400 hover:text-gray-200 hover:bg-[#2a2a2a]' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`
+      }`}
+    >
+      <span className={`shrink-0 ${collapsed ? '' : 'mr-3'}`}>{icon}</span>
+      {!collapsed && <span>{label}</span>}
+    </button>
+  );
+}
+
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function VideoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
   );
 }
 
