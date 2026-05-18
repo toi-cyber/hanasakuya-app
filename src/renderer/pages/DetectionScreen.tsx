@@ -130,21 +130,21 @@ export default function DetectionScreen() {
           />
         </nav>
         <div className="flex-1" />
-        {/* Update button */}
+        {/* Bottom actions */}
         <div className="flex flex-col items-center pb-3">
-          <UpdateButton
+          <SettingsMenuButton
+            dark={dark}
+            collapsed={menuCollapsed}
+            settings={settings}
+            applySettings={applySettings}
+            cameras={core.cameras}
+            logs={core.logs}
+            t={t}
             update={core.update}
             onCheck={core.checkForUpdate}
             onDownload={core.downloadUpdate}
             onInstall={core.installUpdate}
-            dark={dark}
           />
-          {/* Version */}
-          {!menuCollapsed && (
-            <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none`}>
-              v{APP_VERSION}
-            </div>
-          )}
         </div>
       </div>
 
@@ -228,134 +228,13 @@ export default function DetectionScreen() {
         )}
       </div>
 
-      {/* Right drawer */}
-      <div className={`w-64 ${t.drawerBg} border-l ${t.drawerBorder} flex flex-col overflow-y-auto`}>
-        <div className={`px-5 py-4 border-b ${t.drawerHeaderBorder}`}>
-          <h2 className={`text-base font-bold ${t.drawerTitle}`}>設定</h2>
-        </div>
-
-        <div className="px-5 py-4 space-y-5 text-sm flex-1">
-          {/* カメラ */}
-          <Section title="カメラ" dark={dark}>
-            <Label text="デバイス" dark={dark}>
-              <select
-                value={settings.cameraId}
-                onChange={(e) => applySettings('cameraId', e.target.value)}
-                style={t.selectStyle}
-              >
-                {core.cameras.length > 0 ? (
-                  core.cameras.map((cam) => (
-                    <option key={cam.id} value={cam.id}>{cam.name}</option>
-                  ))
-                ) : (
-                  <option value={0}>カメラなし</option>
-                )}
-              </select>
-            </Label>
-          </Section>
-
-          {/* 検出 */}
-          <Section title="検出" dark={dark}>
-            <Label text={`信頼度閾値: ${settings.confidenceThreshold}%`} dark={dark}>
-              <input
-                type="range"
-                min={10} max={90} step={5}
-                value={settings.confidenceThreshold}
-                onChange={(e) => applySettings('confidenceThreshold', parseInt(e.target.value))}
-                className="w-full accent-sakura-500"
-              />
-              <div className={`flex justify-between text-[10px] ${t.rangeHint} mt-0.5`}>
-                <span>10%</span><span>90%</span>
-              </div>
-            </Label>
-          </Section>
-
-          {/* モデル */}
-          <Section title="モデル" dark={dark}>
-            <Label text="入力サイズ" dark={dark}>
-              <select
-                value={settings.inputSize}
-                onChange={(e) => applySettings('inputSize', parseInt(e.target.value))}
-                style={t.selectStyle}
-              >
-                <option value={320}>320x320 (高速)</option>
-                <option value={640}>640x640 (標準)</option>
-              </select>
-            </Label>
-          </Section>
-
-          {/* 表示 */}
-          <Section title="表示" dark={dark}>
-            <Label text={`JPEG品質: ${settings.jpegQuality}%`} dark={dark}>
-              <input
-                type="range"
-                min={20} max={95} step={5}
-                value={settings.jpegQuality}
-                onChange={(e) => applySettings('jpegQuality', parseInt(e.target.value))}
-                className="w-full accent-sakura-500"
-              />
-              <div className={`flex justify-between text-[10px] ${t.rangeHint} mt-0.5`}>
-                <span>高速</span><span>高画質</span>
-              </div>
-            </Label>
-            <Label text="テーマ" dark={dark}>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => applySettings('theme', 'light' as any)}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    !dark
-                      ? 'bg-sakura-500 text-white'
-                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                  }`}
-                >
-                  ライト
-                </button>
-                <button
-                  onClick={() => applySettings('theme', 'dark' as any)}
-                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    dark
-                      ? 'bg-sakura-500 text-white'
-                      : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                  }`}
-                >
-                  ダーク
-                </button>
-              </div>
-            </Label>
-          </Section>
-        </div>
-
-        {/* デバッグログ（設定サイドバー下部） */}
-        {core.logs.length > 0 && (
-          <LogPanel logs={core.logs} dark={dark} />
-        )}
-      </div>
+      {/* Right drawer removed — contents moved into SettingsMenuButton */}
 
     </div>
   );
 }
 
-function LogPanel({ logs, dark }: { logs: string[]; dark: boolean }) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [logs]);
-  return (
-    <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-200'} p-2`}>
-      <div className={`text-[9px] mb-1 ${dark ? 'text-gray-600' : 'text-gray-400'}`}>ログ</div>
-      <div
-        ref={ref}
-        className={`h-28 overflow-y-auto font-mono text-[9px] leading-relaxed ${dark ? 'text-gray-400' : 'text-gray-600'}`}
-      >
-        {logs.map((line, i) => (
-          <div key={i} className={line.includes('error') || line.includes('Error') || line.includes('failed') || line.includes('Failed') ? 'text-red-400' : ''}>
-            {line}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+
 
 function MenuItem({ icon, label, active, onClick, collapsed, dark }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean; dark: boolean }) {
   return (
@@ -421,82 +300,221 @@ function StatChip({ label, value, highlight = false, dark }: { label: string; va
   );
 }
 
-function UpdateButton({ update, onCheck, onDownload, onInstall, dark }: {
+function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras, logs, t, update, onCheck, onDownload, onInstall }: {
+  dark: boolean; collapsed: boolean;
+  settings: import('../components/SettingsModal').Settings;
+  applySettings: (key: keyof import('../components/SettingsModal').Settings, value: number | string) => void;
+  cameras: { id: string; name: string }[];
+  logs: string[];
+  t: Record<string, any>;
   update: { status: UpdateStatus; version?: string; percent?: number; message?: string };
-  onCheck: () => void;
-  onDownload: () => void;
-  onInstall: () => void;
-  dark: boolean;
+  onCheck: () => void; onDownload: () => void; onInstall: () => void;
 }) {
-  const s = update.status;
+  const [open, setOpen] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  const s = update.status;
   const busy = s === 'checking' || s === 'downloading' || installing;
-  const [showPopup, setShowPopup] = useState(false);
+  const hasUpdate = s === 'available' || s === 'ready';
 
-  // 結果が出たらポップアップを表示
   useEffect(() => {
-    if (s === 'up-to-date' || s === 'available' || s === 'ready' || s === 'error') {
-      setShowPopup(true);
-      if (s === 'up-to-date') {
-        const t = setTimeout(() => setShowPopup(false), 3000);
-        return () => clearTimeout(t);
-      }
-    }
-  }, [s]);
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
-  const handleClick = () => {
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [logs]);
+
+  const handleUpdate = () => {
     if (installing) return;
-    if (s === 'available') { onDownload(); setShowPopup(false); }
+    if (s === 'available') onDownload();
     else if (s === 'ready') { setInstalling(true); onInstall(); }
-    else if (!busy) { onCheck(); setShowPopup(false); }
+    else if (!busy) onCheck();
   };
 
-  const popupContent: Partial<Record<UpdateStatus, { text: string; color: string }>> = {
-    'up-to-date': { text: '最新版です', color: dark ? 'text-green-400' : 'text-green-600' },
-    'available': { text: `v${update.version} あり`, color: 'text-sakura-500' },
-    'ready': { text: '再起動して更新', color: 'text-sakura-500' },
-    'downloading': { text: `${update.percent ?? 0}%`, color: dark ? 'text-gray-300' : 'text-gray-600' },
-    'error': { text: 'エラー', color: 'text-red-400' },
+  const updateLabel: Partial<Record<UpdateStatus, string>> = {
+    'idle': 'アップデートを確認',
+    'checking': '確認中...',
+    'up-to-date': '最新版です',
+    'available': `v${update.version} をダウンロード`,
+    'downloading': `ダウンロード中 ${update.percent ?? 0}%`,
+    'ready': '再起動して更新',
+    'error': `エラー: ${update.message ?? ''}`,
   };
-
-  const popup = popupContent[s];
 
   return (
-    <div className="relative mb-2 flex flex-col items-center">
+    <div ref={ref} className="relative">
       <button
-        onClick={handleClick}
-        disabled={busy}
-        title={s === 'error' ? `エラー: ${update.message ?? ''}` : undefined}
-        className={`w-9 h-9 rounded-full ${
-          installing
-            ? 'bg-sakura-500 text-white'
-            : s === 'available' || s === 'ready'
-              ? 'bg-sakura-500 hover:bg-sakura-600 text-white'
-              : dark
-                ? 'bg-[#2a2a2a] hover:bg-[#333]'
-                : 'bg-white hover:bg-gray-200'
-        } flex items-center justify-center transition-colors disabled:opacity-80 disabled:cursor-wait`}
+        onClick={() => setOpen((v) => !v)}
+        title="設定"
+        className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors relative ${
+          open
+            ? 'bg-sakura-500/20 text-sakura-500'
+            : dark
+              ? 'bg-[#2a2a2a] hover:bg-[#333] text-gray-400 hover:text-gray-200'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+        }`}
       >
-        {busy ? (
-          <div className={`w-4 h-4 rounded-full border-2 ${installing ? 'border-white/40 border-t-white' : 'border-sakura-200 border-t-sakura-500'} animate-spin`} />
-        ) : (
-          <svg viewBox="0 0 24 24" className={`w-5 h-5 ${s === 'available' || s === 'ready' ? 'text-white' : dark ? 'text-gray-400' : 'text-gray-500'}`} fill="none" stroke="currentColor" strokeWidth={1.5}>
-            <path d="M12 4v12m0 0l-4-4m4 4l4-4" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+        {hasUpdate && (
+          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-sakura-500 border-2" style={{ borderColor: dark ? '#242424' : '#fff' }} />
         )}
       </button>
 
-      {/* ステータステキスト */}
-      {installing ? (
-        <span className="text-[9px] mt-0.5 text-center leading-tight text-sakura-500">
-          再起動中...
-        </span>
-      ) : (showPopup && popup) || s === 'downloading' ? (
-        <span className={`text-[9px] mt-0.5 text-center leading-tight ${(popup || popupContent['downloading'])?.color}`}>
-          {s === 'downloading' ? `${update.percent ?? 0}%` : popup?.text}
-        </span>
-      ) : null}
+      {open && (
+        <div className={`absolute bottom-0 left-full ml-2 w-72 max-h-[80vh] overflow-y-auto rounded-xl shadow-lg border ${
+          dark ? 'bg-[#242424] border-[#333]' : 'bg-white border-gray-200'
+        } py-4 px-5 z-50 space-y-4 text-sm`}>
+          {/* ヘッダー */}
+          <div className="flex items-center justify-between">
+            <h2 className={`text-base font-bold ${dark ? 'text-white' : 'text-gray-800'}`}>設定</h2>
+            <button onClick={() => setOpen(false)} className={`${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'} text-lg leading-none`}>×</button>
+          </div>
+
+          {/* カメラ */}
+          <Section title="カメラ" dark={dark}>
+            <Label text="デバイス" dark={dark}>
+              <select
+                value={settings.cameraId}
+                onChange={(e) => applySettings('cameraId', e.target.value)}
+                style={t.selectStyle}
+              >
+                {cameras.length > 0 ? (
+                  cameras.map((cam) => (
+                    <option key={cam.id} value={cam.id}>{cam.name}</option>
+                  ))
+                ) : (
+                  <option value={0}>カメラなし</option>
+                )}
+              </select>
+            </Label>
+          </Section>
+
+          {/* 検出 */}
+          <Section title="検出" dark={dark}>
+            <Label text={`信頼度閾値: ${settings.confidenceThreshold}%`} dark={dark}>
+              <input
+                type="range"
+                min={10} max={90} step={5}
+                value={settings.confidenceThreshold}
+                onChange={(e) => applySettings('confidenceThreshold', parseInt(e.target.value))}
+                className="w-full accent-sakura-500"
+              />
+              <div className={`flex justify-between text-[10px] ${t.rangeHint} mt-0.5`}>
+                <span>10%</span><span>90%</span>
+              </div>
+            </Label>
+          </Section>
+
+          {/* モデル */}
+          <Section title="モデル" dark={dark}>
+            <Label text="入力サイズ" dark={dark}>
+              <select
+                value={settings.inputSize}
+                onChange={(e) => applySettings('inputSize', parseInt(e.target.value))}
+                style={t.selectStyle}
+              >
+                <option value={320}>320x320 (高速)</option>
+                <option value={640}>640x640 (標準)</option>
+              </select>
+            </Label>
+          </Section>
+
+          {/* 表示 */}
+          <Section title="表示" dark={dark}>
+            <Label text={`JPEG品質: ${settings.jpegQuality}%`} dark={dark}>
+              <input
+                type="range"
+                min={20} max={95} step={5}
+                value={settings.jpegQuality}
+                onChange={(e) => applySettings('jpegQuality', parseInt(e.target.value))}
+                className="w-full accent-sakura-500"
+              />
+              <div className={`flex justify-between text-[10px] ${t.rangeHint} mt-0.5`}>
+                <span>高速</span><span>高画質</span>
+              </div>
+            </Label>
+            <Label text="テーマ" dark={dark}>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => applySettings('theme', 'light' as any)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    !dark
+                      ? 'bg-sakura-500 text-white'
+                      : 'bg-[#333] text-gray-400 hover:bg-[#3a3a3a]'
+                  }`}
+                >
+                  ライト
+                </button>
+                <button
+                  onClick={() => applySettings('theme', 'dark' as any)}
+                  className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    dark
+                      ? 'bg-sakura-500 text-white'
+                      : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                  }`}
+                >
+                  ダーク
+                </button>
+              </div>
+            </Label>
+          </Section>
+
+          {/* アップデート */}
+          <Section title="アップデート" dark={dark}>
+            <button
+              onClick={handleUpdate}
+              disabled={busy}
+              className={`w-full py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-70 disabled:cursor-wait ${
+                hasUpdate
+                  ? 'bg-sakura-500 hover:bg-sakura-600 text-white'
+                  : s === 'up-to-date'
+                    ? dark ? 'bg-[#333] text-green-400' : 'bg-gray-100 text-green-600'
+                    : s === 'error'
+                      ? 'bg-red-500/20 text-red-400'
+                      : dark ? 'bg-[#333] text-gray-300 hover:bg-[#3a3a3a]' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {busy && (
+                <span className="inline-block w-3 h-3 mr-1.5 rounded-full border-2 border-sakura-200 border-t-sakura-500 animate-spin align-middle" />
+              )}
+              {installing ? '再起動中...' : updateLabel[s] ?? 'アップデートを確認'}
+            </button>
+          </Section>
+
+          {/* ログ */}
+          {logs.length > 0 && (
+            <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-100'} pt-3`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 text-sakura-500`}>ログ</div>
+              <div
+                ref={logRef}
+                className={`h-28 overflow-y-auto rounded-md p-2 font-mono text-[9px] leading-relaxed ${dark ? 'bg-black/40 text-gray-400' : 'bg-gray-50 text-gray-600'}`}
+              >
+                {logs.map((line, i) => (
+                  <div key={i} className={line.includes('error') || line.includes('Error') || line.includes('failed') || line.includes('Failed') ? 'text-red-400' : ''}>
+                    {line}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* バージョン */}
+          <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none text-center`}>
+            v{APP_VERSION}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
