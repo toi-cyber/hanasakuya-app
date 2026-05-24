@@ -13,6 +13,7 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Hanasakuya',
     executableName: 'HanasakuyaDetection',
+    icon: './resources/icons/icon',
     extraResource: [
       process.platform === 'win32'
         ? './native-core/target/release/oocyte-core.exe'
@@ -33,6 +34,8 @@ const config: ForgeConfig = {
     new MakerSquirrel({
       name: 'HanasakuyaDetection',
       setupExe: 'HanasakuyaDetectionSetup.exe',
+      setupIcon: './resources/icons/icon.ico',
+      iconUrl: 'https://raw.githubusercontent.com/toi-cyber/hanasakuya-app/main/resources/icons/icon.ico',
     }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
