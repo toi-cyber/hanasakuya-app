@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import DetectionOverlay from '../components/DetectionOverlay';
 import { DEFAULT_SETTINGS, type Settings } from '../components/SettingsModal';
 import { useNativeCore, type UpdateStatus } from '../hooks/useNativeCore';
+import yokoLogo from '../assets/yoko-logo.png';
+import markLogo from '../assets/mark.png';
 
 export default function DetectionScreen() {
   const [imageSize, setImageSize] = useState({ width: 960, height: 540 });
@@ -173,7 +175,11 @@ export default function DetectionScreen() {
         {/* 待機画面 */}
         {!started && (
           <div className={`absolute inset-0 flex flex-col items-center justify-center ${t.waitBg}`}>
-            <div className="w-20 h-20 rounded-full bg-sakura-500 opacity-80 mb-6" />
+            {dark ? (
+              <img src={markLogo} alt="HANASAKUYA SPP" className="h-20 w-20 mb-6" />
+            ) : (
+              <img src={yokoLogo} alt="HANASAKUYA SPP" className="h-16 w-auto mb-6" />
+            )}
             <p className={`${t.sub} text-sm mb-8`}>
               {core.ready
                 ? `${core.cameras.length} 台のカメラを検出`
