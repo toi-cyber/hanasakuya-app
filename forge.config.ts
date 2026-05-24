@@ -36,6 +36,7 @@ const config: ForgeConfig = {
       setupExe: 'HanasakuyaDetectionSetup.exe',
       setupIcon: './resources/icons/icon.ico',
       iconUrl: 'https://raw.githubusercontent.com/toi-cyber/hanasakuya-app/main/resources/icons/icon.ico',
+      loadingGif: './resources/installer/install-splash.gif',
     }),
     new MakerZIP({}, ['darwin']),
     new MakerRpm({}),
