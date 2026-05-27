@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import DetectionOverlay from '../components/DetectionOverlay';
+import RegisterPanel from '../components/RegisterPanel';
 import { DEFAULT_SETTINGS, type Settings } from '../components/SettingsModal';
 import { useNativeCore, type UpdateStatus } from '../hooks/useNativeCore';
 
@@ -7,7 +8,7 @@ export default function DetectionScreen() {
   const [imageSize, setImageSize] = useState({ width: 960, height: 540 });
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [started, setStarted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'camera' | 'video'>('camera');
+  const [activeTab, setActiveTab] = useState<'camera' | 'video' | 'register'>('camera');
   const [menuCollapsed, setMenuCollapsed] = useState(false);
   const core = useNativeCore();
 
@@ -128,6 +129,14 @@ export default function DetectionScreen() {
             collapsed={menuCollapsed}
             dark={dark}
           />
+          <MenuItem
+            icon={<UserIcon />}
+            label="アカウント登録"
+            active={activeTab === 'register'}
+            onClick={() => setActiveTab('register')}
+            collapsed={menuCollapsed}
+            dark={dark}
+          />
         </nav>
         <div className="flex-1" />
         {/* Bottom actions */}
@@ -226,6 +235,13 @@ export default function DetectionScreen() {
             <VideoPanel core={core} settings={settings} dark={dark} t={t} />
           </div>
         )}
+
+        {/* Register tab */}
+        {activeTab === 'register' && (
+          <div className="flex-1 relative">
+            <RegisterPanel dark={dark} />
+          </div>
+        )}
       </div>
 
       {/* Right drawer removed — contents moved into SettingsMenuButton */}
@@ -267,6 +283,15 @@ function VideoIcon() {
     <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
       <polygon points="23 7 16 12 23 17 23 7" />
       <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
