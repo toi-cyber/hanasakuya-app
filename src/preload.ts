@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+contextBridge.exposeInMainWorld('license', {
+  getStatus: () =>
+    ipcRenderer.invoke('license:getStatus'),
+  register: (key: string, clientSecret: string) =>
+    ipcRenderer.invoke('license:register', { key, clientSecret }),
+  clear: () =>
+    ipcRenderer.invoke('license:clear'),
+});
+
 contextBridge.exposeInMainWorld('coreApi', {
   send: (cmd: Record<string, unknown>) => ipcRenderer.send('core-command', cmd),
   onEvent: (callback: (event: unknown) => void) => {
