@@ -3,6 +3,7 @@ import DetectionOverlay from '../components/DetectionOverlay';
 import RegisterPanel from '../components/RegisterPanel';
 import { DEFAULT_SETTINGS, type Settings } from '../components/SettingsModal';
 import { useNativeCore, type UpdateStatus } from '../hooks/useNativeCore';
+import License from './License';
 import yokoLogo from '../assets/yoko-logo.png';
 import markLogo from '../assets/mark.png';
 
@@ -342,6 +343,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
   onCheck: () => void; onDownload: () => void; onInstall: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'settings' | 'license'>('settings');
   const [installing, setInstalling] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
@@ -411,6 +413,34 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
             <h2 className={`text-base font-bold ${dark ? 'text-white' : 'text-gray-800'}`}>設定</h2>
             <button onClick={() => setOpen(false)} className={`${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'} text-lg leading-none`}>×</button>
           </div>
+
+          {/* タブ */}
+          <div className={`flex border-b ${dark ? 'border-[#333]' : 'border-gray-200'} -mx-5 px-5`}>
+            <button
+              onClick={() => setTab('settings')}
+              className={`py-2 text-xs font-medium mr-5 border-b-2 transition-colors ${
+                tab === 'settings'
+                  ? 'border-sakura-500 text-sakura-500'
+                  : `border-transparent ${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`
+              }`}
+            >
+              一般
+            </button>
+            <button
+              onClick={() => setTab('license')}
+              className={`py-2 text-xs font-medium border-b-2 transition-colors ${
+                tab === 'license'
+                  ? 'border-sakura-500 text-sakura-500'
+                  : `border-transparent ${dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`
+              }`}
+            >
+              ライセンス
+            </button>
+          </div>
+
+          {tab === 'license' ? (
+            <License />
+          ) : (<>
 
           {/* カメラ */}
           <Section title="カメラ" dark={dark}>
@@ -544,6 +574,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
           <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none text-center`}>
             v{APP_VERSION}
           </div>
+          </>)}
         </div>
       )}
     </div>
