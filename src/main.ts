@@ -3,6 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { autoUpdater } from 'electron-updater';
 import { CoreProcess } from './main/coreProcess';
+import { registerLicenseIpc } from './main/ipc/licenseIpc';
 
 // Squirrel.Windows イベント処理
 if (process.platform === 'win32') {
@@ -107,6 +108,8 @@ const createWindow = () => {
       path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
     );
   }
+
+  registerLicenseIpc();
 
   // コアプロセス起動
   core.start();

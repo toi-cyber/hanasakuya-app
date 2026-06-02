@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import License from '../pages/License';
 
 interface Camera {
   id: string;
@@ -40,6 +41,8 @@ const DEFAULT_SETTINGS: Settings = {
 export { DEFAULT_SETTINGS };
 export type { Settings, Theme };
 
+type Tab = 'settings' | 'license';
+
 export default function SettingsModal({
   open,
   onClose,
@@ -48,6 +51,7 @@ export default function SettingsModal({
   onApply,
 }: SettingsModalProps) {
   const [settings, setSettings] = useState<Settings>(currentSettings);
+  const [tab, setTab] = useState<Tab>('settings');
 
   useEffect(() => {
     setSettings(currentSettings);
@@ -73,106 +77,138 @@ export default function SettingsModal({
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-6">
-          {/* カメラ設定 */}
-          <Section title="カメラ">
-            <Label text="デバイス">
-              <select
-                value={settings.cameraId}
-                onChange={(e) => update('cameraId', e.target.value)}
-                className="input-field"
-              >
-                {cameras.length > 0 ? (
-                  cameras.map((cam) => (
-                    <option key={cam.id} value={cam.id}>{cam.name}</option>
-                  ))
-                ) : (
-                  <option value={0}>カメラなし</option>
-                )}
-              </select>
-            </Label>
-          </Section>
-
-          {/* 検出設定 */}
-          <Section title="検出">
-            <Label text={`信頼度閾値: ${settings.confidenceThreshold}%`}>
-              <input
-                type="range"
-                min={10}
-                max={90}
-                step={5}
-                value={settings.confidenceThreshold}
-                onChange={(e) => update('confidenceThreshold', parseInt(e.target.value))}
-                className="w-full accent-sakura-500"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>10% (多め)</span>
-                <span>90% (厳密)</span>
-              </div>
-            </Label>
-          </Section>
-
-          {/* モデル設定 */}
-          <Section title="モデル">
-            <Label text="入力サイズ">
-              <select
-                value={settings.inputSize}
-                onChange={(e) => update('inputSize', parseInt(e.target.value))}
-                className="input-field"
-              >
-                <option value={320}>320×320 (高速)</option>
-                <option value={640}>640×640 (標準)</option>
-              </select>
-            </Label>
-          </Section>
-
-          {/* アプリ設定 */}
-          <Section title="アプリ">
-            <Label text={`表示品質 (JPEG): ${settings.jpegQuality}%`}>
-              <input
-                type="range"
-                min={20}
-                max={95}
-                step={5}
-                value={settings.jpegQuality}
-                onChange={(e) => update('jpegQuality', parseInt(e.target.value))}
-                className="w-full accent-sakura-500"
-              />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
-                <span>20% (高速)</span>
-                <span>95% (高画質)</span>
-              </div>
-            </Label>
-            <Label text="表示解像度 (幅)">
-              <select
-                value={settings.displayResolution}
-                onChange={(e) => update('displayResolution', parseInt(e.target.value))}
-                className="input-field"
-              >
-                <option value={640}>640px (高速)</option>
-                <option value={960}>960px (標準)</option>
-                <option value={1280}>1280px (高画質)</option>
-                <option value={1920}>1920px (フル)</option>
-              </select>
-            </Label>
-          </Section>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 px-6">
           <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+            onClick={() => setTab('settings')}
+            className={`py-3 text-sm font-medium mr-6 border-b-2 transition-colors ${
+              tab === 'settings'
+                ? 'border-sakura-500 text-sakura-500'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
           >
-            キャンセル
+            一般
           </button>
           <button
-            onClick={() => { onApply(settings); onClose(); }}
-            className="px-6 py-2 text-sm bg-sakura-500 hover:bg-sakura-600 text-white rounded-lg font-medium transition-colors"
+            onClick={() => setTab('license')}
+            className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+              tab === 'license'
+                ? 'border-sakura-500 text-sakura-500'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
           >
-            適用
+            ライセンス
           </button>
         </div>
+
+        {tab === 'license' ? (
+          <div className="px-6 py-4">
+            <License />
+          </div>
+        ) : (
+          <>
+            <div className="px-6 py-4 space-y-6">
+              {/* カメラ設定 */}
+              <Section title="カメラ">
+                <Label text="デバイス">
+                  <select
+                    value={settings.cameraId}
+                    onChange={(e) => update('cameraId', e.target.value)}
+                    className="input-field"
+                  >
+                    {cameras.length > 0 ? (
+                      cameras.map((cam) => (
+                        <option key={cam.id} value={cam.id}>{cam.name}</option>
+                      ))
+                    ) : (
+                      <option value={0}>カメラなし</option>
+                    )}
+                  </select>
+                </Label>
+              </Section>
+
+              {/* 検出設定 */}
+              <Section title="検出">
+                <Label text={`信頼度閾値: ${settings.confidenceThreshold}%`}>
+                  <input
+                    type="range"
+                    min={10}
+                    max={90}
+                    step={5}
+                    value={settings.confidenceThreshold}
+                    onChange={(e) => update('confidenceThreshold', parseInt(e.target.value))}
+                    className="w-full accent-sakura-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>10% (多め)</span>
+                    <span>90% (厳密)</span>
+                  </div>
+                </Label>
+              </Section>
+
+              {/* モデル設定 */}
+              <Section title="モデル">
+                <Label text="入力サイズ">
+                  <select
+                    value={settings.inputSize}
+                    onChange={(e) => update('inputSize', parseInt(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value={320}>320×320 (高速)</option>
+                    <option value={640}>640×640 (標準)</option>
+                  </select>
+                </Label>
+              </Section>
+
+              {/* アプリ設定 */}
+              <Section title="アプリ">
+                <Label text={`表示品質 (JPEG): ${settings.jpegQuality}%`}>
+                  <input
+                    type="range"
+                    min={20}
+                    max={95}
+                    step={5}
+                    value={settings.jpegQuality}
+                    onChange={(e) => update('jpegQuality', parseInt(e.target.value))}
+                    className="w-full accent-sakura-500"
+                  />
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>20% (高速)</span>
+                    <span>95% (高画質)</span>
+                  </div>
+                </Label>
+                <Label text="表示解像度 (幅)">
+                  <select
+                    value={settings.displayResolution}
+                    onChange={(e) => update('displayResolution', parseInt(e.target.value))}
+                    className="input-field"
+                  >
+                    <option value={640}>640px (高速)</option>
+                    <option value={960}>960px (標準)</option>
+                    <option value={1280}>1280px (高画質)</option>
+                    <option value={1920}>1920px (フル)</option>
+                  </select>
+                </Label>
+              </Section>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => { onApply(settings); onClose(); }}
+                className="px-6 py-2 text-sm bg-sakura-500 hover:bg-sakura-600 text-white rounded-lg font-medium transition-colors"
+              >
+                適用
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Styles for input fields */}
