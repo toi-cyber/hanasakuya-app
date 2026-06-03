@@ -556,7 +556,10 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
           {/* ログ */}
           {logs.length > 0 && (
             <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-100'} pt-3`}>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 text-sakura-500`}>ログ</div>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className={`text-[10px] font-semibold uppercase tracking-wider text-sakura-500`}>ログ</div>
+                <CopyLogsButton logs={logs} dark={dark} />
+              </div>
               <div
                 ref={logRef}
                 className={`h-28 overflow-y-auto rounded-md p-2 font-mono text-[9px] leading-relaxed ${dark ? 'bg-black/40 text-gray-400' : 'bg-gray-50 text-gray-600'}`}
@@ -578,6 +581,35 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
         </div>
       )}
     </div>
+  );
+}
+
+function CopyLogsButton({ logs, dark }: { logs: string[]; dark: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    const text = logs.join('\n');
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+        copied
+          ? 'text-green-400'
+          : dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+      }`}
+    >
+      {copied ? 'コピーしました' : 'コピー'}
+    </button>
   );
 }
 

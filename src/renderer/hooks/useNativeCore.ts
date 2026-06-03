@@ -86,30 +86,80 @@ export function useNativeCore() {
   // 推論中フラグ（フレームの多重送信を防ぐ）
   const inferPendingRef = useRef(false);
   const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // null=未確認, false=drawImage使用, true=ImageCapture使用（GPUオーバーレイ対策）
+  const useImageCaptureRef = useRef<boolean | null>(null);
+
+  // レンダラー側ログをUIログビューアーへ追加
+  const addLog = useCallback((msg: string) => {
+    const ts = new Date().toISOString().slice(11, 23);
+    setState((s) => ({ ...s, logs: [...s.logs.slice(-199), `[${ts}] ${msg}`] }));
+  }, []);
 
   // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
-  const captureFrame = useCallback(() => {
+  // キャプチャーボードでは ctx.drawImage(video) が色の歪んだフレームを返すため
+  // ImageCapture.grabFrame() を試行し、失敗時は drawImage にフォールバック
+  const captureFrame = useCallback(async () => {
     if (!detectingRef.current) return;
-    if (inferPendingRef.current) return; // 推論中はスキップ
+    if (inferPendingRef.current) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
 
-    const maxWidth = inferSizeRef.current;
-    const scale = Math.min(1, maxWidth / (video.videoWidth || maxWidth));
-    canvas.width = Math.round((video.videoWidth || maxWidth) * scale);
-    canvas.height = Math.round((video.videoHeight || 480) * scale);
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
-    if (!jpeg_base64) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (w === 0 || h === 0) return;
 
     inferPendingRef.current = true;
-    window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
+
+    try {
+      const maxWidth = inferSizeRef.current;
+      const scale = Math.min(1, maxWidth / w);
+      canvas.width = Math.round(w * scale);
+      canvas.height = Math.round(h * scale);
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { inferPendingRef.current = false; return; }
+
+      let drawn = false;
+
+      // ImageCapture.grabFrame() を試行（キャプチャーボード対応）
+      if (useImageCaptureRef.current !== false) {
+        const track = streamRef.current?.getVideoTracks()[0];
+        if (track && typeof ImageCapture !== 'undefined') {
+          try {
+            const bitmap = await new ImageCapture(track).grabFrame();
+            ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            drawn = true;
+            if (useImageCaptureRef.current === null) {
+              console.log('[captureFrame] ImageCapture.grabFrame() OK');
+              useImageCaptureRef.current = true;
+            }
+          } catch {
+            // ImageCapture 失敗 → drawImage にフォールバック
+            if (useImageCaptureRef.current === null) {
+              console.log('[captureFrame] ImageCapture.grabFrame() failed, falling back to drawImage');
+              useImageCaptureRef.current = false;
+            }
+          }
+        } else if (useImageCaptureRef.current === null) {
+          useImageCaptureRef.current = false;
+        }
+      }
+
+      // フォールバック: 通常の drawImage
+      if (!drawn) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      }
+
+      const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
+      if (!jpeg_base64) { inferPendingRef.current = false; return; }
+
+      window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
+    } catch (e) {
+      inferPendingRef.current = false;
+      console.error('[captureFrame] Error:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -150,6 +200,8 @@ export function useNativeCore() {
           setState((s) => ({ ...s, detecting: false }));
           break;
         case 'error':
+          // 推論エラー時もフラグをリセット（解除しないとフレーム送信が永久に止まる）
+          inferPendingRef.current = false;
           setState((s) => ({ ...s, error: event.message }));
           break;
         case 'video_progress':
@@ -210,31 +262,51 @@ export function useNativeCore() {
 
   /** Web API でカメラを列挙（Windows カメラ許可ダイアログも内部で処理） */
   const listCameras = useCallback(async () => {
+    addLog('[カメラ列挙] 開始...');
+
+    // getUserMedia でカメラ許可を取得（Windows カメラプライバシーダイアログをここで出す）
     try {
-      // getUserMedia でカメラ許可を取得（Windows カメラプライバシーダイアログをここで出す）
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach((t) => t.stop());
-    } catch {
+      addLog('[カメラ列挙] getUserMedia 成功 (カメラ許可取得済み)');
+    } catch (e: any) {
+      addLog(`[カメラ列挙] getUserMedia 失敗: ${e?.name}: ${e?.message}`);
       // 許可拒否でも enumerateDevices は続ける
     }
+
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
+      addLog(`[カメラ列挙] enumerateDevices: ${devices.length} デバイス検出`);
+
+      // 全デバイスをログ出力（診断用）
+      devices.forEach((d, i) => {
+        addLog(`[カメラ列挙]   [${i}] kind=${d.kind} label="${d.label}" id=${d.deviceId.slice(0, 12)}...`);
+      });
+
       const cameras = devices
         .filter((d) => d.kind === 'videoinput')
         .map((d, i) => ({
           id: d.deviceId,
           name: d.label || `Camera ${i + 1}`,
         }));
+
+      addLog(`[カメラ列挙] videoinput: ${cameras.length} 台のカメラ`);
+      cameras.forEach((c, i) => {
+        addLog(`[カメラ列挙]   カメラ${i + 1}: "${c.name}"`);
+      });
+
       setState((s) => ({ ...s, cameras }));
-    } catch {
+    } catch (e: any) {
+      addLog(`[カメラ列挙] enumerateDevices 失敗: ${e?.name}: ${e?.message}`);
       setState((s) => ({ ...s, cameras: [] }));
     }
-  }, []);
+  }, [addLog]);
 
   /** レンダラー getUserMedia でカメラを開く */
   const startDetection = useCallback(async (deviceId: string) => {
     detectingRef.current = true;
     inferPendingRef.current = false;
+    useImageCaptureRef.current = null; // キャプチャ方法を再確認（カメラ切り替え対応）
     fpsRef.current = { frames: 0, lastTime: Date.now(), fps: 0 };
     try {
       const constraints: MediaStreamConstraints = {
@@ -245,7 +317,11 @@ export function useNativeCore() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
+        // 顕微鏡カメラなどで play() がハングするケースに備えてタイムアウトを設定
+        await Promise.race([
+          videoRef.current.play(),
+          new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+        ]).catch(() => {});
       }
 
       setState((s) => ({ ...s, detecting: true, error: null }));
@@ -262,6 +338,7 @@ export function useNativeCore() {
   const stopDetection = useCallback(() => {
     detectingRef.current = false;
     inferPendingRef.current = false;
+    useImageCaptureRef.current = null;
     if (captureIntervalRef.current) {
       clearInterval(captureIntervalRef.current);
       captureIntervalRef.current = null;
@@ -339,6 +416,7 @@ export function useNativeCore() {
     ...state,
     videoRef,
     canvasRef,
+    addLog,
     listCameras,
     startDetection,
     stopDetection,
