@@ -257,8 +257,10 @@ fn infer_jpeg_frame(
         return Err("Decoded frame is empty".to_string());
     }
 
-    let input = camera::CameraCapture::preprocess_for_inference(&frame, inference::INPUT_SIZE)?;
-    inference.run(&input)
+    let (input, letterbox) = camera::CameraCapture::preprocess_for_inference(&frame, inference::INPUT_SIZE)?;
+    let (mut boxes, ms) = inference.run(&input)?;
+    letterbox.correct_boxes(&mut boxes, inference::INPUT_SIZE as f64);
+    Ok((boxes, ms))
 }
 
 /// ONNXモデルファイルを探す

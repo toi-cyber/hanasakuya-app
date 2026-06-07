@@ -90,11 +90,13 @@ fn run_video_pipeline(
             eprintln!("[video] First frame read OK");
         }
 
-        let input = CameraCapture::preprocess_for_inference(&frame, INPUT_SIZE)
-            .unwrap_or_default();
+        let preprocess_result = CameraCapture::preprocess_for_inference(&frame, INPUT_SIZE).ok();
 
-        let boxes = if !input.is_empty() {
-            inference.run(&input).map(|(b, _)| b).unwrap_or_default()
+        let boxes = if let Some((input, letterbox)) = preprocess_result {
+            inference.run(&input).map(|(mut b, _)| {
+                letterbox.correct_boxes(&mut b, INPUT_SIZE as f64);
+                b
+            }).unwrap_or_default()
         } else {
             vec![]
         };

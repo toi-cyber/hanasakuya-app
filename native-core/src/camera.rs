@@ -1,8 +1,31 @@
-use crate::CameraInfo;
+use crate::{CameraInfo, DetectionBox};
 use opencv::prelude::*;
 use opencv::videoio;
 use opencv::imgproc;
 use opencv::core::Mat;
+
+/// レターボックス前処理のパディング情報（座標補正用）
+pub struct LetterboxInfo {
+    pub pad_x: f64,
+    pub pad_y: f64,
+}
+
+impl LetterboxInfo {
+    /// レターボックス空間の正規化座標を元画像の正規化座標に変換
+    pub fn correct_boxes(&self, boxes: &mut Vec<DetectionBox>, input_size: f64) {
+        for b in boxes.iter_mut() {
+            b.x1 = (b.x1 * input_size - self.pad_x) / (input_size - 2.0 * self.pad_x);
+            b.y1 = (b.y1 * input_size - self.pad_y) / (input_size - 2.0 * self.pad_y);
+            b.x2 = (b.x2 * input_size - self.pad_x) / (input_size - 2.0 * self.pad_x);
+            b.y2 = (b.y2 * input_size - self.pad_y) / (input_size - 2.0 * self.pad_y);
+            // クランプ
+            b.x1 = b.x1.clamp(0.0, 1.0);
+            b.y1 = b.y1.clamp(0.0, 1.0);
+            b.x2 = b.x2.clamp(0.0, 1.0);
+            b.y2 = b.y2.clamp(0.0, 1.0);
+        }
+    }
+}
 
 /// 利用可能なカメラデバイスを列挙
 pub fn list_cameras() -> Vec<CameraInfo> {
@@ -113,22 +136,46 @@ impl CameraCapture {
         Ok(data.to_vec())
     }
 
-    /// BGRフレームをRGBにリサイズ（推論用、640x640）
-    pub fn preprocess_for_inference(bgr: &Mat, target_size: i32) -> Result<Vec<f32>, String> {
+    /// BGRフレームをレターボックス付きでRGB 640x640に変換（推論用）
+    /// アスペクト比を保持し、余白をダークモード背景色(#2a2a2a)で埋める
+    pub fn preprocess_for_inference(bgr: &Mat, target_size: i32) -> Result<(Vec<f32>, LetterboxInfo), String> {
         // BGR → RGB
         let mut rgb = Mat::default();
         imgproc::cvt_color(bgr, &mut rgb, imgproc::COLOR_BGR2RGB, 0, opencv::core::AlgorithmHint::ALGO_HINT_DEFAULT)
             .map_err(|e| format!("BGR2RGB failed: {}", e))?;
 
-        // リサイズ
+        let src_w = rgb.cols() as f64;
+        let src_h = rgb.rows() as f64;
+        let target = target_size as f64;
+
+        // アスペクト比を保持するスケール
+        let scale = (target / src_w).min(target / src_h);
+        let new_w = (src_w * scale).round() as i32;
+        let new_h = (src_h * scale).round() as i32;
+
+        // リサイズ（アスペクト比保持）
         let mut resized = Mat::default();
-        let size = opencv::core::Size::new(target_size, target_size);
-        imgproc::resize(&rgb, &mut resized, size, 0.0, 0.0, imgproc::INTER_LINEAR)
+        imgproc::resize(&rgb, &mut resized, opencv::core::Size::new(new_w, new_h), 0.0, 0.0, imgproc::INTER_LINEAR)
             .map_err(|e| format!("Resize failed: {}", e))?;
 
+        // パディング量（上下左右に均等配分）
+        let pad_x = (target_size - new_w) / 2;
+        let pad_y = (target_size - new_h) / 2;
+        let pad_r = target_size - new_w - pad_x;
+        let pad_b = target_size - new_h - pad_y;
+
+        // レターボックス: ダークモード背景色 #2a2a2a (RGB: 42, 42, 42)
+        let mut letterboxed = Mat::default();
+        opencv::core::copy_make_border(
+            &resized, &mut letterboxed,
+            pad_y, pad_b, pad_x, pad_r,
+            opencv::core::BORDER_CONSTANT,
+            opencv::core::Scalar::new(42.0, 42.0, 42.0, 0.0),
+        ).map_err(|e| format!("Letterbox padding failed: {}", e))?;
+
         // u8 → f32 正規化 [0, 1]、NCHW形式に変換
-        let data = resized.data_bytes()
-            .map_err(|e| format!("Failed to get resized data: {}", e))?;
+        let data = letterboxed.data_bytes()
+            .map_err(|e| format!("Failed to get letterboxed data: {}", e))?;
 
         let pixels = target_size as usize;
         let mut nchw = vec![0.0f32; 3 * pixels * pixels];
@@ -147,7 +194,12 @@ impl CameraCapture {
             }
         }
 
-        Ok(nchw)
+        let info = LetterboxInfo {
+            pad_x: pad_x as f64,
+            pad_y: pad_y as f64,
+        };
+
+        Ok((nchw, info))
     }
 
     /// BGRフレームをJPEGエンコード（UI表示転送用）
