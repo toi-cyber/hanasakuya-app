@@ -97,7 +97,7 @@ fn run_pipeline(
             .ok()
             .map(|jpeg| base64::engine::general_purpose::STANDARD.encode(&jpeg));
 
-        let input = match CameraCapture::preprocess_for_inference(&frame, INPUT_SIZE) {
+        let (input, letterbox) = match CameraCapture::preprocess_for_inference(&frame, INPUT_SIZE) {
             Ok(data) => data,
             Err(e) => {
                 eprintln!("[pipeline] Preprocess error: {}", e);
@@ -106,7 +106,8 @@ fn run_pipeline(
         };
 
         match inference.run(&input) {
-            Ok((boxes, inference_ms)) => {
+            Ok((mut boxes, inference_ms)) => {
+                letterbox.correct_boxes(&mut boxes, INPUT_SIZE as f64);
                 let fps = fps_counter.tick();
                 let count = boxes.len();
 
