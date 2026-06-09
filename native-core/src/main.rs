@@ -7,7 +7,7 @@ mod video_pipeline;
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
-use opencv::prelude::MatTraitConst;
+use opencv::prelude::{MatTraitConst, MatTraitConstManual};
 
 use pipeline::Pipeline;
 use video_pipeline::VideoPipeline;
@@ -73,6 +73,8 @@ enum Event {
     VideoError { message: String },
     #[serde(rename = "video_cancelled")]
     VideoCancelled,
+    #[serde(rename = "log")]
+    Log { message: String },
 }
 
 #[derive(Serialize, Debug)]
@@ -244,6 +246,8 @@ fn infer_jpeg_frame(
 ) -> Result<(Vec<DetectionBox>, u64), String> {
     use base64::Engine;
     use opencv::{core::Vector, imgcodecs};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static FRAME_COUNT: AtomicU64 = AtomicU64::new(0);
 
     let jpeg_bytes = base64::engine::general_purpose::STANDARD
         .decode(jpeg_base64)
@@ -257,9 +261,78 @@ fn infer_jpeg_frame(
         return Err("Decoded frame is empty".to_string());
     }
 
+    let count = FRAME_COUNT.fetch_add(1, Ordering::Relaxed);
+
+    // 最初のフレームと100フレームごとに診断ログを画面に表示
+    let diag = count == 0 || count % 100 == 0;
+    if diag {
+        let rows = frame.rows();
+        let cols = frame.cols();
+        let channels = frame.channels();
+        let depth = frame.depth();
+        send_event(&Event::Log {
+            message: format!("[診断] frame#{}: size={}x{} ch={} depth={} jpeg_len={}",
+                count, cols, rows, channels, depth, jpeg_bytes.len()),
+        });
+
+        // BGR各チャンネルのピクセル値統計
+        if let Ok(data) = frame.data_bytes() {
+            let total = (rows * cols) as usize;
+            if data.len() >= total * 3 {
+                let (mut sum_b, mut sum_g, mut sum_r) = (0u64, 0u64, 0u64);
+                let (mut min_b, mut min_g, mut min_r) = (255u8, 255u8, 255u8);
+                let (mut max_b, mut max_g, mut max_r) = (0u8, 0u8, 0u8);
+                for i in 0..total {
+                    let b = data[i * 3];
+                    let g = data[i * 3 + 1];
+                    let r = data[i * 3 + 2];
+                    sum_b += b as u64; sum_g += g as u64; sum_r += r as u64;
+                    min_b = min_b.min(b); min_g = min_g.min(g); min_r = min_r.min(r);
+                    max_b = max_b.max(b); max_g = max_g.max(g); max_r = max_r.max(r);
+                }
+                let n = total as f64;
+                send_event(&Event::Log {
+                    message: format!("[診断] BGR平均: B={:.1} G={:.1} R={:.1}",
+                        sum_b as f64 / n, sum_g as f64 / n, sum_r as f64 / n),
+                });
+                send_event(&Event::Log {
+                    message: format!("[診断] BGR範囲: B=[{}-{}] G=[{}-{}] R=[{}-{}]",
+                        min_b, max_b, min_g, max_g, min_r, max_r),
+                });
+            }
+        }
+    }
+
     let (input, letterbox) = camera::CameraCapture::preprocess_for_inference(&frame, inference::INPUT_SIZE)?;
+
+    // 前処理後のNCHW値の診断
+    if diag {
+        let pixels = inference::INPUT_SIZE as usize;
+        let ch_size = pixels * pixels;
+        let r_mean: f32 = input[0..ch_size].iter().sum::<f32>() / ch_size as f32;
+        let g_mean: f32 = input[ch_size..2*ch_size].iter().sum::<f32>() / ch_size as f32;
+        let b_mean: f32 = input[2*ch_size..3*ch_size].iter().sum::<f32>() / ch_size as f32;
+        send_event(&Event::Log {
+            message: format!("[診断] NCHW平均(0-1): R={:.4} G={:.4} B={:.4}", r_mean, g_mean, b_mean),
+        });
+    }
+
     let (mut boxes, ms) = inference.run(&input)?;
     letterbox.correct_boxes(&mut boxes, inference::INPUT_SIZE as f64);
+
+    // 検出結果の診断
+    if diag {
+        send_event(&Event::Log {
+            message: format!("[診断] 検出数={} inference={}ms", boxes.len(), ms),
+        });
+        for (i, b) in boxes.iter().take(3).enumerate() {
+            send_event(&Event::Log {
+                message: format!("[診断]   box[{}]: conf={:.4} ({:.1},{:.1})-({:.1},{:.1})",
+                    i, b.confidence, b.x1, b.y1, b.x2, b.y2),
+            });
+        }
+    }
+
     Ok((boxes, ms))
 }
 
