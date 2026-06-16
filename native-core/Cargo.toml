@@ -3,6 +3,18 @@ name = "oocyte-core"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "oocyte-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "diagnose"
+path = "src/bin/diagnose.rs"
+
+[lib]
+name = "oocyte_core"
+path = "src/lib.rs"
+
 [dependencies]
 # ONNX Runtime
 ort = { version = "2.0.0-rc.12", features = ["load-dynamic"] }
