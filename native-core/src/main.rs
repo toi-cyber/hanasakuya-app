@@ -1,9 +1,12 @@
-mod camera;
-mod inference;
 mod pipeline;
-mod postprocess;
 mod shared_memory_bridge;
 mod video_pipeline;
+
+use oocyte_core::camera;
+use oocyte_core::inference;
+use oocyte_core::postprocess;
+use oocyte_core::DetectionBox;
+use oocyte_core::CameraInfo;
 
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Write};
@@ -75,21 +78,6 @@ enum Event {
     VideoCancelled,
     #[serde(rename = "log")]
     Log { message: String },
-}
-
-#[derive(Serialize, Debug)]
-pub struct CameraInfo {
-    pub id: i32,
-    pub name: String,
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct DetectionBox {
-    pub x1: f64,
-    pub y1: f64,
-    pub x2: f64,
-    pub y2: f64,
-    pub confidence: f64,
 }
 
 fn send_event(event: &Event) {

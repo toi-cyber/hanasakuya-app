@@ -8,8 +8,8 @@ use opencv::videoio;
 use opencv::imgproc;
 use opencv::core as cv_core;
 
-use crate::camera::CameraCapture;
-use crate::inference::{OnnxInference, INPUT_SIZE};
+use oocyte_core::camera::CameraCapture;
+use oocyte_core::inference::{OnnxInference, INPUT_SIZE};
 use crate::{send_event, Event};
 
 pub struct VideoPipeline {
