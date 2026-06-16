@@ -187,19 +187,21 @@ fn main() {
                 let path = match &model_path {
                     Some(p) => p.clone(),
                     None => {
+                        send_event(&Event::Log { message: "[診断] InferFrame: モデルパスが見つかりません".to_string() });
                         send_event(&Event::Error { message: "Model file not found".to_string() });
                         continue;
                     }
                 };
-                // 初回のみモデルをロード（以降は使い回す）
+                // モデル未ロード時は毎回ロードを試みる
                 if current_inference.is_none() {
-                    eprintln!("[main] Loading inference engine for renderer-driven mode...");
+                    send_event(&Event::Log { message: format!("[診断] モデルロード開始: {}", path) });
                     match inference::OnnxInference::load(std::path::Path::new(&path)) {
                         Ok(inf) => {
-                            eprintln!("[main] Inference engine ready");
+                            send_event(&Event::Log { message: "[診断] モデルロード成功".to_string() });
                             current_inference = Some(inf);
                         }
                         Err(e) => {
+                            send_event(&Event::Log { message: format!("[診断] モデルロード失敗: {}", e) });
                             send_event(&Event::Error { message: format!("Model load failed: {}", e) });
                             continue;
                         }
