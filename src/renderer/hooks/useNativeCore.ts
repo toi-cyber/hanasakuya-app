@@ -86,8 +86,10 @@ export function useNativeCore() {
   // 推論中フラグ（フレームの多重送信を防ぐ）
   const inferPendingRef = useRef(false);
   const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // null=未確認, false=drawImage使用, true=ImageCapture使用（GPUオーバーレイ対策）
+  // null=未確認/再試行, false=drawImage使用, true=ImageCapture使用（GPUオーバーレイ対策）
   const useImageCaptureRef = useRef<boolean | null>(null);
+  // 黒フレーム連続カウント（キャプチャーボードのGPUオーバーレイ検出用）
+  const consecutiveBlackFramesRef = useRef(0);
 
   // レンダラー側ログをUIログビューアーへ追加
   const addLog = useCallback((msg: string) => {
@@ -96,8 +98,9 @@ export function useNativeCore() {
   }, []);
 
   // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
-  // キャプチャーボードでは ctx.drawImage(video) が色の歪んだフレームを返すため
-  // ImageCapture.grabFrame() を試行し、失敗時は drawImage にフォールバック
+  // キャプチャーボードのGPUオーバーレイ問題への対策:
+  //   1. ImageCapture.grabFrame() を優先試行（1回の失敗で諦めない）
+  //   2. キャプチャ後に黒フレーム検出 → 取得方法を自動切り替え
   const captureFrame = useCallback(async () => {
     if (!detectingRef.current) return;
     if (inferPendingRef.current) return;
@@ -121,36 +124,55 @@ export function useNativeCore() {
       const ctx = canvas.getContext('2d');
       if (!ctx) { inferPendingRef.current = false; return; }
 
-      let drawn = false;
-
-      // ImageCapture.grabFrame() を試行（キャプチャーボード対応）
+      // ImageCapture.grabFrame() を試行（キャプチャーボードのGPUオーバーレイ対策）
+      // 1回の例外で永久に諦めず、毎フレーム再試行する
+      let usedGrabFrame = false;
       if (useImageCaptureRef.current !== false) {
         const track = streamRef.current?.getVideoTracks()[0];
         if (track && typeof ImageCapture !== 'undefined') {
           try {
             const bitmap = await new ImageCapture(track).grabFrame();
             ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-            drawn = true;
+            usedGrabFrame = true;
             if (useImageCaptureRef.current === null) {
-              console.log('[captureFrame] ImageCapture.grabFrame() OK');
+              addLog('[フレーム] ImageCapture.grabFrame() 使用開始');
               useImageCaptureRef.current = true;
             }
           } catch {
-            // ImageCapture 失敗 → drawImage にフォールバック
-            if (useImageCaptureRef.current === null) {
-              console.log('[captureFrame] ImageCapture.grabFrame() failed, falling back to drawImage');
-              useImageCaptureRef.current = false;
-            }
+            // 失敗しても null のまま → 次フレームで再試行
+            console.log('[captureFrame] grabFrame failed, retrying next frame');
           }
         } else if (useImageCaptureRef.current === null) {
           useImageCaptureRef.current = false;
         }
       }
 
-      // フォールバック: 通常の drawImage
-      if (!drawn) {
+      if (!usedGrabFrame) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
+
+      // 黒フレーム検出: 32x32サンプルで平均輝度を計算
+      // キャプチャーボードのGPUオーバーレイは真っ黒フレームを返すことがある
+      const sample = ctx.getImageData(0, 0, Math.min(canvas.width, 32), Math.min(canvas.height, 32));
+      let brightnessSum = 0;
+      for (let i = 0; i < sample.data.length; i += 4) {
+        brightnessSum += sample.data[i] + sample.data[i + 1] + sample.data[i + 2];
+      }
+      const meanBrightness = brightnessSum / (sample.data.length / 4 * 3);
+
+      if (meanBrightness < 8) {
+        consecutiveBlackFramesRef.current++;
+        const method = usedGrabFrame ? 'grabFrame' : 'drawImage';
+        // 最初の3回と30フレームごとに警告ログ
+        if (consecutiveBlackFramesRef.current <= 3 || consecutiveBlackFramesRef.current % 30 === 0) {
+          addLog(`[フレーム] 黒フレーム検出 (輝度=${meanBrightness.toFixed(1)}, ${method}) → 取得方法を切り替えます`);
+        }
+        // 取得方法を切り替えて次フレームで再試行
+        useImageCaptureRef.current = usedGrabFrame ? false : null;
+        inferPendingRef.current = false;
+        return;
+      }
+      consecutiveBlackFramesRef.current = 0;
 
       const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
       if (!jpeg_base64) { inferPendingRef.current = false; return; }
@@ -160,7 +182,7 @@ export function useNativeCore() {
       inferPendingRef.current = false;
       console.error('[captureFrame] Error:', e);
     }
-  }, []);
+  }, [addLog]);
 
   useEffect(() => {
     window.coreApi.onEvent((event: any) => {
