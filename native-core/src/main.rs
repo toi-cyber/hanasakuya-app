@@ -5,6 +5,7 @@ mod video_pipeline;
 use oocyte_core::camera;
 use oocyte_core::inference;
 use oocyte_core::postprocess;
+use oocyte_core::tracker::Tracker;
 use oocyte_core::DetectionBox;
 use oocyte_core::CameraInfo;
 
@@ -95,6 +96,7 @@ fn main() {
     let mut current_pipeline: Option<Pipeline> = None;
     let mut current_video: Option<VideoPipeline> = None;
     let mut current_inference: Option<inference::OnnxInference> = None;
+    let mut infer_tracker = Tracker::new();
     let pipeline_settings = std::sync::Arc::new(pipeline::PipelineSettings::new());
 
     // モデルパスを特定（実行ファイルと同階層 or resources/）
@@ -132,6 +134,7 @@ fn main() {
                 if let Some(p) = current_pipeline.take() {
                     p.stop();
                 }
+                infer_tracker.reset();
 
                 match &model_path {
                     Some(path) => {
@@ -155,6 +158,7 @@ fn main() {
                 if let Some(p) = current_pipeline.take() {
                     p.stop();
                 }
+                infer_tracker.reset();
             }
             Command::SetThreshold { value } => {
                 pipeline_settings.conf_threshold_x100.store(
@@ -212,6 +216,7 @@ fn main() {
                     inf.set_conf_threshold(conf);
                     match infer_jpeg_frame(&jpeg_base64, inf) {
                         Ok((boxes, inference_ms)) => {
+                            let boxes = infer_tracker.update(boxes);
                             let count = boxes.len();
                             send_event(&Event::Detection {
                                 boxes,

@@ -40,7 +40,7 @@ interface CoreState {
   cameras: { id: string; name: string }[];
   detecting: boolean;
   lastDetection: {
-    boxes: { x1: number; y1: number; x2: number; y2: number; confidence: number }[];
+    boxes: { x1: number; y1: number; x2: number; y2: number; confidence: number; track_id: number }[];
     count: number;
     inferenceMs: number;
     fps: number;

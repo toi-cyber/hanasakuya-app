@@ -8,6 +8,7 @@ use opencv::prelude::MatTraitConst;
 use opencv::prelude::MatTraitConstManual;
 use oocyte_core::camera::CameraCapture;
 use oocyte_core::inference::{OnnxInference, INPUT_SIZE};
+use oocyte_core::tracker::Tracker;
 use crate::{send_event, Event};
 
 /// ランタイム設定（Atomic で安全に変更可能）
@@ -78,6 +79,7 @@ fn run_pipeline(
 
     let mut fps_counter = FpsCounter::new();
     let mut frame_count: u64 = 0;
+    let mut tracker = Tracker::new();
 
     while running.load(Ordering::Relaxed) {
         // 設定を読み取り
@@ -155,6 +157,7 @@ fn run_pipeline(
         match inference.run(&input) {
             Ok((mut boxes, inference_ms)) => {
                 letterbox.correct_boxes(&mut boxes, INPUT_SIZE as f64);
+                let boxes = tracker.update(boxes);
                 let fps = fps_counter.tick();
                 let count = boxes.len();
 
