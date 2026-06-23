@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 import { autoUpdater } from 'electron-updater';
 import { CoreProcess } from './main/coreProcess';
 import { registerLicenseIpc } from './main/ipc/licenseIpc';
+import { registerLoggerIpc, initLoggerPrefs } from './main/ipc/loggerIpc';
+import { forwardToRemote } from './main/remoteLogger';
 
 // Squirrel.Windows イベント処理
 if (process.platform === 'win32') {
@@ -110,11 +112,13 @@ const createWindow = () => {
   }
 
   registerLicenseIpc();
+  registerLoggerIpc();
+  initLoggerPrefs();
 
   // コアプロセス起動
   core.start();
 
-  // コアからのイベントをレンダラーに転送
+  // コアからのイベントをレンダラーに転送 + リモートログ
   core.on((event) => {
     if (event.event === 'detection') {
       // ログ抑制
@@ -122,6 +126,7 @@ const createWindow = () => {
       console.log('[Main] Core event:', JSON.stringify(event));
     }
     mainWindow.webContents.send('core-event', event);
+    forwardToRemote(event);
   });
 
   ipcMain.on('core-command', (_event, cmd) => {

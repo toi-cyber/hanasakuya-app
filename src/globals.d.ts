@@ -17,6 +17,10 @@ interface Window {
     register(key: string, clientSecret: string): Promise<VerifyResult>;
     clear(): Promise<void>;
   };
+  logger: {
+    getEnabled(): Promise<boolean>;
+    setEnabled(enabled: boolean): Promise<void>;
+  };
 }
 
 declare module '*.png' {

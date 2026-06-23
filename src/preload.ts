@@ -9,6 +9,11 @@ contextBridge.exposeInMainWorld('license', {
     ipcRenderer.invoke('license:clear'),
 });
 
+contextBridge.exposeInMainWorld('logger', {
+  getEnabled: () => ipcRenderer.invoke('logger:getEnabled'),
+  setEnabled: (enabled: boolean) => ipcRenderer.invoke('logger:setEnabled', enabled),
+});
+
 contextBridge.exposeInMainWorld('coreApi', {
   send: (cmd: Record<string, unknown>) => ipcRenderer.send('core-command', cmd),
   onEvent: (callback: (event: unknown) => void) => {
