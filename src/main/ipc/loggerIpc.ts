@@ -1,7 +1,7 @@
 import { ipcMain, app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
-import { setRemoteLoggingEnabled, getRemoteLoggingEnabled } from '../remoteLogger';
+import { setRemoteLoggingEnabled, getRemoteLoggingEnabled, queueLog } from '../remoteLogger';
 
 const PREF_FILE = path.join(app.getPath('userData'), 'logger-prefs.json');
 
@@ -29,5 +29,11 @@ export function registerLoggerIpc(): void {
   ipcMain.handle('logger:setEnabled', (_event, enabled: boolean) => {
     setRemoteLoggingEnabled(enabled);
     savePref(enabled);
+  });
+
+  ipcMain.handle('logger:forwardLog', (_event, message: string) => {
+    if (getRemoteLoggingEnabled()) {
+      queueLog(message);
+    }
   });
 }

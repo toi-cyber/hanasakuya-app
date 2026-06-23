@@ -94,7 +94,9 @@ export function useNativeCore() {
   // レンダラー側ログをUIログビューアーへ追加
   const addLog = useCallback((msg: string) => {
     const ts = new Date().toISOString().slice(11, 23);
-    setState((s) => ({ ...s, logs: [...s.logs.slice(-199), `[${ts}] ${msg}`] }));
+    const line = `[${ts}] ${msg}`;
+    setState((s) => ({ ...s, logs: [...s.logs.slice(-199), line] }));
+    window.logger?.forwardLog(line);
   }, []);
 
   // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
