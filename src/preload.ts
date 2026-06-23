@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('license', {
 contextBridge.exposeInMainWorld('logger', {
   getEnabled: () => ipcRenderer.invoke('logger:getEnabled'),
   setEnabled: (enabled: boolean) => ipcRenderer.invoke('logger:setEnabled', enabled),
+  forwardLog: (message: string) => ipcRenderer.invoke('logger:forwardLog', message),
 });
 
 contextBridge.exposeInMainWorld('coreApi', {

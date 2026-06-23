@@ -1,16 +1,26 @@
-import { net } from 'electron';
+import { net, app } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { CoreEvent } from './coreProcess';
 
-const SERVER_URL = 'https://application.hanakuya.ai/log.php'; // TODO: 本番URLに変更
-const LOG_TOKEN  = 'log-token';          // TODO: log.php の EXPECTED_TOKEN と一致させる
-
-function post(payload: object): void {
+function loadWebhookUrl(): string {
   try {
-    const req = net.request({ method: 'POST', url: SERVER_URL });
+    const configPath = path.join(app.getPath('userData'), 'slack-config.json');
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    return JSON.parse(raw).webhookUrl ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function postToSlack(text: string): void {
+  const url = loadWebhookUrl();
+  if (!url) return;
+  try {
+    const req = net.request({ method: 'POST', url });
     req.setHeader('Content-Type', 'application/json');
-    req.setHeader('X-Hanasakuya-Log-Token', LOG_TOKEN);
     req.on('error', () => {});
-    req.write(JSON.stringify(payload));
+    req.write(JSON.stringify({ text }));
     req.end();
   } catch {
     // ネットワーク不可時も本体処理に影響させない
@@ -23,12 +33,12 @@ let logTimer: ReturnType<typeof setTimeout> | null = null;
 
 function flushLogs(): void {
   if (logBuffer.length === 0) return;
-  post({ level: 'log', messages: logBuffer, timestamp: new Date().toISOString() });
+  postToSlack('```\n' + logBuffer.join('\n') + '\n```');
   logBuffer = [];
   logTimer = null;
 }
 
-function queueLog(message: string): void {
+export function queueLog(message: string): void {
   logBuffer.push(message);
   if (!logTimer) {
     logTimer = setTimeout(flushLogs, 3000);
@@ -41,13 +51,10 @@ let detectionTimer: ReturnType<typeof setInterval> | null = null;
 
 function flushDetection(): void {
   if (stats.frames === 0) return;
-  post({
-    level: 'detection',
-    frames: stats.frames,
-    totalDetections: stats.totalDetections,
-    avgInferenceMs: Math.round(stats.totalInferenceMs / stats.frames),
-    timestamp: new Date().toISOString(),
-  });
+  const avg = Math.round(stats.totalInferenceMs / stats.frames);
+  postToSlack(
+    `*[検出集計]* frames=${stats.frames} detections=${stats.totalDetections} avgInference=${avg}ms`
+  );
   stats = { frames: 0, totalDetections: 0, totalInferenceMs: 0 };
 }
 
@@ -60,7 +67,7 @@ function stopDetectionTimer(): void {
   if (!detectionTimer) return;
   clearInterval(detectionTimer);
   detectionTimer = null;
-  flushDetection(); // 停止時に残分を送信
+  flushDetection();
 }
 
 // --- ログ送信の有効/無効 ---
@@ -83,7 +90,7 @@ export function forwardToRemote(event: CoreEvent): void {
       break;
 
     case 'error':
-      post({ level: 'error', message: event.message, timestamp: new Date().toISOString() });
+      postToSlack(`:warning: *[error]* ${event.message}`);
       break;
 
     case 'detection':
