@@ -3,7 +3,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CoreEvent } from './coreProcess';
 
-// Webhook URL は userData/slack-config.json { "webhookUrl": "https://..." } から読む
 function loadWebhookUrl(): string {
   try {
     const configPath = path.join(app.getPath('userData'), 'slack-config.json');
