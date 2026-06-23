@@ -1,11 +1,24 @@
-import { net } from 'electron';
+import { net, app } from 'electron';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { CoreEvent } from './coreProcess';
 
-const SLACK_WEBHOOK_URL = 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'; // TODO: 本番URLに変更
+// Webhook URL は userData/slack-config.json { "webhookUrl": "https://..." } から読む
+function loadWebhookUrl(): string {
+  try {
+    const configPath = path.join(app.getPath('userData'), 'slack-config.json');
+    const raw = fs.readFileSync(configPath, 'utf-8');
+    return JSON.parse(raw).webhookUrl ?? '';
+  } catch {
+    return '';
+  }
+}
 
 function postToSlack(text: string): void {
+  const url = loadWebhookUrl();
+  if (!url) return;
   try {
-    const req = net.request({ method: 'POST', url: SLACK_WEBHOOK_URL });
+    const req = net.request({ method: 'POST', url });
     req.setHeader('Content-Type', 'application/json');
     req.on('error', () => {});
     req.write(JSON.stringify({ text }));
