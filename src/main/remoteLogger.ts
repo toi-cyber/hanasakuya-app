@@ -68,36 +68,22 @@ function stopDetectionTimer(): void {
   flushDetection();
 }
 
-// --- ログ送信の有効/無効 ---
-let remoteLoggingEnabled = false;
-
-export function setRemoteLoggingEnabled(value: boolean): void {
-  remoteLoggingEnabled = value;
-}
-
-export function getRemoteLoggingEnabled(): boolean {
-  return remoteLoggingEnabled;
-}
-
 // --- 公開API ---
 export function forwardToRemote(event: CoreEvent): void {
-  if (!remoteLoggingEnabled) return;
+  if (!webhookUrl) return;
   switch (event.event) {
     case 'log':
       queueLog(event.message as string);
       break;
-
     case 'error':
       postToSlack(`:warning: *[error]* ${event.message}`);
       break;
-
     case 'detection':
       startDetectionTimer();
       stats.frames++;
       stats.totalDetections += (event.count as number) ?? 0;
       stats.totalInferenceMs += (event.inference_ms as number) ?? 0;
       break;
-
     case 'stopped':
       stopDetectionTimer();
       break;
