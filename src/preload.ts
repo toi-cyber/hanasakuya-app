@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('license', {
 contextBridge.exposeInMainWorld('logger', {
   getEnabled: () => ipcRenderer.invoke('logger:getEnabled'),
   setEnabled: (enabled: boolean) => ipcRenderer.invoke('logger:setEnabled', enabled),
+  getWebhookUrl: () => ipcRenderer.invoke('logger:getWebhookUrl'),
+  setWebhookUrl: (url: string) => ipcRenderer.invoke('logger:setWebhookUrl', url),
   forwardLog: (message: string) => ipcRenderer.invoke('logger:forwardLog', message),
 });
 
