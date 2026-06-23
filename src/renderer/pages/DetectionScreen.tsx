@@ -345,6 +345,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'settings' | 'license'>('settings');
   const [installing, setInstalling] = useState(false);
+  const [remoteLogging, setRemoteLogging] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -360,6 +361,18 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      window.logger.getEnabled().then(setRemoteLogging);
+    }
+  }, [open]);
+
+  const handleRemoteLoggingToggle = async () => {
+    const next = !remoteLogging;
+    setRemoteLogging(next);
+    await window.logger.setEnabled(next);
+  };
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
@@ -529,6 +542,25 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
                 </button>
               </div>
             </Label>
+          </Section>
+
+          {/* ログ送信 */}
+          <Section title="ログ送信" dark={dark}>
+            <div className="flex items-center justify-between">
+              <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+                {remoteLogging ? '送信中' : '停止中'}
+              </span>
+              <button
+                onClick={handleRemoteLoggingToggle}
+                className={`relative w-10 h-5 rounded-full transition-colors ${
+                  remoteLogging ? 'bg-sakura-500' : dark ? 'bg-[#444]' : 'bg-gray-300'
+                }`}
+              >
+                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  remoteLogging ? 'translate-x-5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
           </Section>
 
           {/* アップデート */}
