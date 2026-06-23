@@ -1,4 +1,5 @@
-import { net, app } from 'electron';
+import { app } from 'electron';
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { CoreEvent } from './coreProcess';
@@ -17,13 +18,14 @@ function postToSlack(text: string): void {
   const url = loadWebhookUrl();
   if (!url) return;
   try {
-    const req = net.request({ method: 'POST', url });
-    req.setHeader('Content-Type', 'application/json');
-    req.on('error', () => {});
-    req.write(JSON.stringify({ text }));
-    req.end();
+    spawn('curl', [
+      '-X', 'POST',
+      '-H', 'Content-type: application/json',
+      '--data', JSON.stringify({ text }),
+      url,
+    ], { stdio: 'ignore' });
   } catch {
-    // ネットワーク不可時も本体処理に影響させない
+    // curl が使えない環境でも本体処理に影響させない
   }
 }
 
