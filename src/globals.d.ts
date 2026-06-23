@@ -20,6 +20,8 @@ interface Window {
   logger: {
     getEnabled(): Promise<boolean>;
     setEnabled(enabled: boolean): Promise<void>;
+    getWebhookUrl(): Promise<string>;
+    setWebhookUrl(url: string): Promise<void>;
     forwardLog(message: string): Promise<void>;
   };
 }

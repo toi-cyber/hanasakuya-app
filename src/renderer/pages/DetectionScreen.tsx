@@ -346,6 +346,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
   const [tab, setTab] = useState<'settings' | 'license'>('settings');
   const [installing, setInstalling] = useState(false);
   const [remoteLogging, setRemoteLogging] = useState(false);
+  const [webhookUrl, setWebhookUrlState] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -365,6 +366,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
   useEffect(() => {
     if (open) {
       window.logger.getEnabled().then(setRemoteLogging);
+      window.logger.getWebhookUrl().then(setWebhookUrlState);
     }
   }, [open]);
 
@@ -372,6 +374,10 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
     const next = !remoteLogging;
     setRemoteLogging(next);
     await window.logger.setEnabled(next);
+  };
+
+  const handleWebhookUrlSave = async () => {
+    await window.logger.setWebhookUrl(webhookUrl);
   };
 
   useEffect(() => {
@@ -546,9 +552,9 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
 
           {/* ログ送信 */}
           <Section title="ログ送信" dark={dark}>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-2">
               <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-                {remoteLogging ? '送信中' : '停止中'}
+                {remoteLogging ? 'Slack 送信中' : '停止中'}
               </span>
               <button
                 onClick={handleRemoteLoggingToggle}
@@ -559,6 +565,27 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
                   remoteLogging ? 'translate-x-5' : 'translate-x-0.5'
                 }`} />
+              </button>
+            </div>
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrlState(e.target.value)}
+                placeholder="Webhook URL"
+                className={`flex-1 text-[10px] px-2 py-1 rounded-md border font-mono truncate ${
+                  dark
+                    ? 'bg-[#1a1a1a] border-[#444] text-gray-300 placeholder-gray-600'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 placeholder-gray-400'
+                }`}
+              />
+              <button
+                onClick={handleWebhookUrlSave}
+                className={`shrink-0 px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                  dark ? 'bg-[#333] hover:bg-[#444] text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                }`}
+              >
+                保存
               </button>
             </div>
           </Section>

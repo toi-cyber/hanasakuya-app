@@ -1,28 +1,24 @@
-import { app } from 'electron';
 import { spawn } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
 import type { CoreEvent } from './coreProcess';
 
-function loadWebhookUrl(): string {
-  try {
-    const configPath = path.join(app.getPath('userData'), 'slack-config.json');
-    const raw = fs.readFileSync(configPath, 'utf-8');
-    return JSON.parse(raw).webhookUrl ?? '';
-  } catch {
-    return '';
-  }
+let webhookUrl = '';
+
+export function setWebhookUrl(url: string): void {
+  webhookUrl = url;
+}
+
+export function getWebhookUrl(): string {
+  return webhookUrl;
 }
 
 function postToSlack(text: string): void {
-  const url = loadWebhookUrl();
-  if (!url) return;
+  if (!webhookUrl) return;
   try {
     spawn('curl', [
       '-X', 'POST',
       '-H', 'Content-type: application/json',
       '--data', JSON.stringify({ text }),
-      url,
+      webhookUrl,
     ], { stdio: 'ignore' });
   } catch {
     // curl が使えない環境でも本体処理に影響させない
