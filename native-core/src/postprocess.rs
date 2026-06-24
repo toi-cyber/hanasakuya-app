@@ -64,6 +64,7 @@ pub fn process_output(
             x2: (cx + w / 2.0) / input_size,
             y2: (cy + h / 2.0) / input_size,
             confidence: score,
+            track_id: 0,
         });
     }
 

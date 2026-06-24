@@ -6,6 +6,17 @@ interface DetectionBox {
   x2: number;
   y2: number;
   confidence: number;
+  track_id: number;
+}
+
+// トラックIDに対応した色を返す（8色パレット循環）
+const TRACK_HUES = [142, 210, 45, 280, 0, 170, 60, 320];
+function trackColor(trackId: number): { stroke: string; fill: string } {
+  const hue = trackId > 0 ? TRACK_HUES[(trackId - 1) % TRACK_HUES.length] : 142;
+  return {
+    stroke: `hsl(${hue}, 85%, 55%)`,
+    fill: `hsla(${hue}, 85%, 55%, 0.75)`,
+  };
 }
 
 interface DetectionOverlayProps {
@@ -34,7 +45,7 @@ export default function DetectionOverlay({
     canvas.height = displayH;
     ctx.clearRect(0, 0, displayW, displayH);
 
-    boxes.forEach((box, i) => {
+    boxes.forEach((box) => {
       // 正規化座標 (0-1) → 表示ピクセル座標
       const x1 = box.x1 * displayW;
       const y1 = box.y1 * displayH;
@@ -46,14 +57,16 @@ export default function DetectionOverlay({
       // 真円: 幅と高さの平均を半径にする
       const radius = ((x2 - x1) + (y2 - y1)) / 4;
 
-      ctx.strokeStyle = '#4ade80';
+      // トラックIDで色分け
+      const { stroke, fill } = trackColor(box.track_id);
+      ctx.strokeStyle = stroke;
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.stroke();
 
-      // ラベル
-      const label = `#${i + 1} ${Math.round(box.confidence * 100)}%`;
+      // ラベル: トラックIDを表示
+      const label = `#${box.track_id} ${Math.round(box.confidence * 100)}%`;
       ctx.font = 'bold 14px sans-serif';
       const metrics = ctx.measureText(label);
       const labelW = metrics.width + 8;
@@ -61,7 +74,7 @@ export default function DetectionOverlay({
       const labelX = cx - labelW / 2;
       const labelY = cy - radius - labelH - 4;
 
-      ctx.fillStyle = 'rgba(74, 222, 128, 0.75)';
+      ctx.fillStyle = fill;
       ctx.beginPath();
       ctx.roundRect(labelX, labelY, labelW, labelH, 4);
       ctx.fill();

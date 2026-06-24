@@ -1,6 +1,7 @@
 pub mod camera;
 pub mod inference;
 pub mod postprocess;
+pub mod tracker;
 
 use serde::Serialize;
 
@@ -11,6 +12,7 @@ pub struct DetectionBox {
     pub x2: f64,
     pub y2: f64,
     pub confidence: f64,
+    pub track_id: u32,
 }
 
 #[derive(Serialize, Debug)]
