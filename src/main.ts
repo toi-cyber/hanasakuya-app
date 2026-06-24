@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { autoUpdater } from 'electron-updater';
 import { CoreProcess } from './main/coreProcess';
 import { registerLicenseIpc } from './main/ipc/licenseIpc';
+import { saveWebhookUrl, loadWebhookUrl, sendLogsToSlack } from './main/webhookStore';
 
 // Squirrel.Windows イベント処理
 if (process.platform === 'win32') {
@@ -195,6 +196,16 @@ const createWindow = () => {
   ipcMain.on('install-update', () => {
     core.stop();
     autoUpdater.quitAndInstall();
+  });
+
+  // Webhook（ログ送信）IPC
+  ipcMain.handle('webhook:getUrl', () => loadWebhookUrl());
+  ipcMain.handle('webhook:setUrl', (_event, url: string) => {
+    saveWebhookUrl(url);
+  });
+  ipcMain.handle('webhook:sendLogs', async (_event, logs: string[]) => {
+    const url = loadWebhookUrl();
+    await sendLogsToSlack(url, logs, app.getVersion());
   });
 
   // 自動更新（本番ビルドのみ）

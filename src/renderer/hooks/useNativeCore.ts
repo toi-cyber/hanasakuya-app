@@ -11,6 +11,9 @@ declare global {
       checkForUpdate: () => void;
       downloadUpdate: () => void;
       installUpdate: () => void;
+      getWebhookUrl: () => Promise<string>;
+      setWebhookUrl: (url: string) => Promise<void>;
+      sendLogs: (logs: string[]) => Promise<void>;
       requestCameraPermission: () => Promise<boolean>;
     };
   }

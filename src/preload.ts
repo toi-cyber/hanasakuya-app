@@ -20,6 +20,10 @@ contextBridge.exposeInMainWorld('coreApi', {
   checkForUpdate: () => ipcRenderer.send('check-for-update'),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
+  // Webhook（ログ収集）
+  getWebhookUrl: (): Promise<string> => ipcRenderer.invoke('webhook:getUrl'),
+  setWebhookUrl: (url: string): Promise<void> => ipcRenderer.invoke('webhook:setUrl', url),
+  sendLogs: (logs: string[]): Promise<void> => ipcRenderer.invoke('webhook:sendLogs', logs),
   // Windows カメラ許可取得（getUserMedia でOS許可ダイアログを出す）
   requestCameraPermission: async (): Promise<boolean> => {
     try {

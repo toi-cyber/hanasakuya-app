@@ -347,6 +347,33 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
   const [installing, setInstalling] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookStatus, setWebhookStatus] = useState<'idle' | 'sending' | 'ok' | 'error'>('idle');
+  const [webhookError, setWebhookError] = useState('');
+
+  // Webhook URL を初期ロード
+  useEffect(() => {
+    window.coreApi.getWebhookUrl().then(setWebhookUrl);
+  }, []);
+
+  const handleWebhookSave = async (url: string) => {
+    setWebhookUrl(url);
+    await window.coreApi.setWebhookUrl(url);
+  };
+
+  const handleSendLogs = async () => {
+    setWebhookStatus('sending');
+    setWebhookError('');
+    try {
+      await window.coreApi.sendLogs(logs);
+      setWebhookStatus('ok');
+      setTimeout(() => setWebhookStatus('idle'), 2000);
+    } catch (e: any) {
+      setWebhookStatus('error');
+      setWebhookError(e?.message || '送信失敗');
+      setTimeout(() => setWebhookStatus('idle'), 3000);
+    }
+  };
 
   const s = update.status;
   const busy = s === 'checking' || s === 'downloading' || installing;
@@ -558,7 +585,26 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
             <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-100'} pt-3`}>
               <div className="flex items-center justify-between mb-1.5">
                 <div className={`text-[10px] font-semibold uppercase tracking-wider text-sakura-500`}>ログ</div>
-                <CopyLogsButton logs={logs} dark={dark} />
+                <div className="flex items-center gap-1.5">
+                  <CopyLogsButton logs={logs} dark={dark} />
+                  {webhookUrl && (
+                    <button
+                      onClick={handleSendLogs}
+                      disabled={webhookStatus === 'sending'}
+                      className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                        webhookStatus === 'ok' ? 'text-green-400'
+                        : webhookStatus === 'error' ? 'text-red-400'
+                        : webhookStatus === 'sending' ? 'text-yellow-400'
+                        : dark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      {webhookStatus === 'sending' ? '送信中...'
+                        : webhookStatus === 'ok' ? '送信しました'
+                        : webhookStatus === 'error' ? webhookError
+                        : 'Slack送信'}
+                    </button>
+                  )}
+                </div>
               </div>
               <div
                 ref={logRef}
@@ -572,6 +618,20 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
               </div>
             </div>
           )}
+
+          {/* Webhook URL 設定 */}
+          <div className={`border-t ${dark ? 'border-[#333]' : 'border-gray-100'} pt-3`}>
+            <div className={`text-[10px] font-semibold uppercase tracking-wider text-sakura-500 mb-1.5`}>ログ送信先 (Slack Webhook)</div>
+            <input
+              type="text"
+              value={webhookUrl}
+              onChange={(e) => handleWebhookSave(e.target.value)}
+              placeholder="https://hooks.slack.com/services/..."
+              className={`w-full text-[10px] px-2 py-1 rounded-md border ${
+                dark ? 'bg-[#1a1a1a] border-[#333] text-gray-300 placeholder-gray-600' : 'bg-white border-gray-200 text-gray-700 placeholder-gray-400'
+              }`}
+            />
+          </div>
 
           {/* バージョン */}
           <div className={`text-[10px] ${dark ? 'text-gray-600' : 'text-gray-400'} select-none text-center`}>
