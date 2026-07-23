@@ -119,6 +119,7 @@ export class CoreProcess {
     const candidates = isDev
       ? [
           '/opt/homebrew/lib/libonnxruntime.dylib',
+          'C:\\onnxruntime-directml\\lib\\onnxruntime.dll',
           'C:\\onnxruntime\\lib\\onnxruntime.dll',
         ]
       : [

@@ -1,3 +1,4 @@
+use ort::ep;
 use ort::session::Session;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::value::Tensor;
@@ -16,7 +17,7 @@ pub struct OnnxInference {
 }
 
 impl OnnxInference {
-    /// モデルをロード
+    /// モデルをロード（GPU利用可能ならDirectML/CoreMLで高速化）
     pub fn load(model_path: &Path) -> Result<Self, String> {
         let num_threads = std::thread::available_parallelism()
             .map(|n| n.get().saturating_sub(1).max(1))
@@ -25,24 +26,68 @@ impl OnnxInference {
         eprintln!("[inference] Loading model: {:?}", model_path);
         eprintln!("[inference] Using {} intra-op threads", num_threads);
 
-        let mut builder = Session::builder()
+        let builder = Session::builder()
             .map_err(|e| format!("Session builder: {}", e))?
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(|e| format!("Optimization level: {}", e))?
             .with_intra_threads(num_threads)
             .map_err(|e| format!("Intra threads: {}", e))?;
 
-        let session = builder
+        // GPU Execution Provider を登録（失敗時は自動でCPUフォールバック）
+        let (ep_name, builder) = Self::with_gpu_provider(builder);
+        eprintln!("[inference] Execution Provider: {}", ep_name);
+
+        let mut session_builder = builder;
+        let session = session_builder
             .commit_from_file(model_path)
             .map_err(|e| format!("Load model: {}", e))?;
 
-        eprintln!("[inference] Model loaded successfully");
+        eprintln!("[inference] Model loaded successfully (EP: {})", ep_name);
 
         Ok(Self {
             session,
             conf_threshold: 0.30,
             iou_threshold: 0.45,
         })
+    }
+
+    /// プラットフォームに応じたGPU Execution Providerを登録
+    /// EPが利用不可でもort内部で自動的にCPUフォールバックされる
+    fn with_gpu_provider(builder: ort::session::builder::SessionBuilder) -> (String, ort::session::builder::SessionBuilder) {
+        // Windows: DirectML（NVIDIA/AMD/Intel GPU対応、CUDAインストール不要）
+        #[cfg(target_os = "windows")]
+        {
+            let dml = ep::DirectML::default()
+                .with_performance_preference(ep::directml::PerformancePreference::HighPerformance)
+                .build();
+            match builder.with_execution_providers([dml]) {
+                Ok(b) => return ("DirectML".to_string(), b),
+                Err(e) => {
+                    eprintln!("[inference] DirectML registration failed: {}", e);
+                    // builder は消費済みなので新しく作り直す必要があるが、
+                    // EP登録はerror_on_failure未設定時は基本的にErrにならない
+                    unreachable!("DirectML EP registration should not fail without error_on_failure");
+                }
+            }
+        }
+
+        // macOS: CoreML（Apple Silicon / GPU / Neural Engine）
+        #[cfg(target_vendor = "apple")]
+        {
+            let coreml = ep::CoreML::default()
+                .with_compute_units(ep::coreml::ComputeUnits::All)
+                .build();
+            match builder.with_execution_providers([coreml]) {
+                Ok(b) => return ("CoreML".to_string(), b),
+                Err(e) => {
+                    eprintln!("[inference] CoreML registration failed: {}", e);
+                    unreachable!("CoreML EP registration should not fail without error_on_failure");
+                }
+            }
+        }
+
+        #[allow(unreachable_code)]
+        ("CPU".to_string(), builder)
     }
 
     pub fn set_conf_threshold(&mut self, threshold: f64) {

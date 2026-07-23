@@ -88,6 +88,10 @@ export function useNativeCore() {
   const captureIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // null=未確認/再試行, false=drawImage使用, true=ImageCapture使用（GPUオーバーレイ対策）
   const useImageCaptureRef = useRef<boolean | null>(null);
+  // ImageCapture インスタンスキャッシュ（毎フレーム new するのを防ぐ）
+  const imageCaptureRef = useRef<ImageCapture | null>(null);
+  // grabFrame 連続失敗カウント
+  const grabFrameFailCountRef = useRef(0);
   // 黒フレーム連続カウント（キャプチャーボードのGPUオーバーレイ検出用）
   const consecutiveBlackFramesRef = useRef(0);
   // 送信フレーム数カウント（診断ログ用）
@@ -103,7 +107,7 @@ export function useNativeCore() {
 
   // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
   // キャプチャーボードのGPUオーバーレイ問題への対策:
-  //   1. ImageCapture.grabFrame() を優先試行（1回の失敗で諦めない）
+  //   1. ImageCapture.grabFrame() を優先試行（3回失敗で drawImage にフォールバック）
   //   2. キャプチャ後に黒フレーム検出 → 取得方法を自動切り替え
   const captureFrame = useCallback(async () => {
     if (!detectingRef.current) return;
@@ -118,6 +122,7 @@ export function useNativeCore() {
     if (w === 0 || h === 0) return;
 
     inferPendingRef.current = true;
+    const t0 = performance.now();
 
     try {
       const maxWidth = inferSizeRef.current;
@@ -128,23 +133,32 @@ export function useNativeCore() {
       const ctx = canvas.getContext('2d');
       if (!ctx) { inferPendingRef.current = false; return; }
 
-      // ImageCapture.grabFrame() を試行（キャプチャーボードのGPUオーバーレイ対策）
-      // 1回の例外で永久に諦めず、毎フレーム再試行する
+      // フレーム取得
       let usedGrabFrame = false;
       if (useImageCaptureRef.current !== false) {
         const track = streamRef.current?.getVideoTracks()[0];
         if (track && typeof ImageCapture !== 'undefined') {
           try {
-            const bitmap = await new ImageCapture(track).grabFrame();
+            // ImageCapture をキャッシュ（毎フレーム new しない）
+            if (!imageCaptureRef.current) {
+              imageCaptureRef.current = new ImageCapture(track);
+            }
+            const bitmap = await imageCaptureRef.current.grabFrame();
             ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
             usedGrabFrame = true;
+            grabFrameFailCountRef.current = 0;
             if (useImageCaptureRef.current === null) {
               addLog('[フレーム] ImageCapture.grabFrame() 使用開始');
               useImageCaptureRef.current = true;
             }
           } catch {
-            // 失敗しても null のまま → 次フレームで再試行
-            console.log('[captureFrame] grabFrame failed, retrying next frame');
+            grabFrameFailCountRef.current++;
+            // 3回連続失敗で drawImage に永久フォールバック
+            if (grabFrameFailCountRef.current >= 3) {
+              addLog('[フレーム] grabFrame 3回失敗 → drawImage に切り替え');
+              useImageCaptureRef.current = false;
+              imageCaptureRef.current = null;
+            }
           }
         } else if (useImageCaptureRef.current === null) {
           useImageCaptureRef.current = false;
@@ -154,9 +168,9 @@ export function useNativeCore() {
       if (!usedGrabFrame) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
+      const tCapture = performance.now();
 
       // 黒フレーム検出: 32x32サンプルで平均輝度を計算
-      // キャプチャーボードのGPUオーバーレイは真っ黒フレームを返すことがある
       const sample = ctx.getImageData(0, 0, Math.min(canvas.width, 32), Math.min(canvas.height, 32));
       let brightnessSum = 0;
       for (let i = 0; i < sample.data.length; i += 4) {
@@ -167,23 +181,24 @@ export function useNativeCore() {
       if (meanBrightness < 8) {
         consecutiveBlackFramesRef.current++;
         const method = usedGrabFrame ? 'grabFrame' : 'drawImage';
-        // 最初の3回と30フレームごとに警告ログ
         if (consecutiveBlackFramesRef.current <= 3 || consecutiveBlackFramesRef.current % 30 === 0) {
           addLog(`[フレーム] 黒フレーム検出 (輝度=${meanBrightness.toFixed(1)}, ${method}) → 取得方法を切り替えます`);
         }
-        // 取得方法を切り替えて次フレームで再試行
         useImageCaptureRef.current = usedGrabFrame ? false : null;
+        imageCaptureRef.current = null;
         inferPendingRef.current = false;
         return;
       }
       consecutiveBlackFramesRef.current = 0;
 
       const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
+      const tEncode = performance.now();
       if (!jpeg_base64) { inferPendingRef.current = false; return; }
 
       framesSentRef.current++;
-      if (framesSentRef.current <= 3 || framesSentRef.current % 50 === 0) {
-        addLog(`[推論] フレーム送信 #${framesSentRef.current} (${canvas.width}x${canvas.height}, jpeg=${jpeg_base64.length}B, 輝度=${meanBrightness.toFixed(1)})`);
+      // 最初の5フレームと50フレームごとにタイミング診断
+      if (framesSentRef.current <= 5 || framesSentRef.current % 50 === 0) {
+        addLog(`[推論] #${framesSentRef.current} ${canvas.width}x${canvas.height} capture=${(tCapture - t0).toFixed(0)}ms encode=${(tEncode - tCapture).toFixed(0)}ms jpeg=${jpeg_base64.length}B`);
       }
       window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
     } catch (e) {
@@ -202,9 +217,12 @@ export function useNativeCore() {
           // Rust 側カメラ列挙は使わない（互換性のため残す）
           break;
         case 'detection': {
-          // 推論完了 → 次フレーム送信可能
+          // 推論完了 → 即座に次フレームをキャプチャ（setInterval待ちを省略）
           inferPendingRef.current = false;
-          if (framesSentRef.current <= 3 || framesSentRef.current % 50 === 0) {
+          if (detectingRef.current) {
+            captureFrame();
+          }
+          if (framesSentRef.current <= 5 || framesSentRef.current % 50 === 0) {
             addLog(`[推論] 応答: 検出数=${event.count} 推論=${event.inference_ms}ms`);
           }
           // FPS をレンダラー側で計算
@@ -233,8 +251,11 @@ export function useNativeCore() {
           setState((s) => ({ ...s, detecting: false }));
           break;
         case 'error':
-          // 推論エラー時もフラグをリセット（解除しないとフレーム送信が永久に止まる）
+          // 推論エラー時もフラグをリセットし即座に次フレーム
           inferPendingRef.current = false;
+          if (detectingRef.current) {
+            captureFrame();
+          }
           setState((s) => ({ ...s, error: event.message }));
           break;
         case 'video_progress':
@@ -340,6 +361,8 @@ export function useNativeCore() {
     detectingRef.current = true;
     inferPendingRef.current = false;
     useImageCaptureRef.current = null; // キャプチャ方法を再確認（カメラ切り替え対応）
+    imageCaptureRef.current = null;
+    grabFrameFailCountRef.current = 0;
     fpsRef.current = { frames: 0, lastTime: Date.now(), fps: 0 };
     framesSentRef.current = 0;
     try {
@@ -375,6 +398,8 @@ export function useNativeCore() {
     detectingRef.current = false;
     inferPendingRef.current = false;
     useImageCaptureRef.current = null;
+    imageCaptureRef.current = null;
+    grabFrameFailCountRef.current = 0;
     if (captureIntervalRef.current) {
       clearInterval(captureIntervalRef.current);
       captureIntervalRef.current = null;
