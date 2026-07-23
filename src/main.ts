@@ -7,9 +7,11 @@ import { registerLicenseIpc } from './main/ipc/licenseIpc';
 import { registerLoggerIpc, initLoggerPrefs } from './main/ipc/loggerIpc';
 import { forwardToRemote } from './main/remoteLogger';
 
-// キャプチャーボードのGPUオーバーレイで黒フレームになる問題の対策
-// ソフトウェアレンダリングにすることで drawImage() でフレームを取得可能にする
-app.disableHardwareAcceleration();
+// キャプチャーボードのGPUオーバーレイで黒フレームになる問題の対策（Windows のみ）
+// macOS では AVFoundation の映像キャプチャが壊れるため適用しない
+if (process.platform === 'win32') {
+  app.disableHardwareAcceleration();
+}
 
 // Squirrel.Windows イベント処理
 if (process.platform === 'win32') {
