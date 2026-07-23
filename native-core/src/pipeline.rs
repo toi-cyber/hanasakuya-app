@@ -157,7 +157,7 @@ fn run_pipeline(
         match inference.run(&input) {
             Ok((mut boxes, inference_ms)) => {
                 letterbox.correct_boxes(&mut boxes, INPUT_SIZE as f64);
-                let boxes = tracker.update(boxes);
+                let boxes = tracker.update(boxes, conf_thresh);
                 let fps = fps_counter.tick();
                 let count = boxes.len();
 

@@ -216,7 +216,7 @@ fn main() {
                     inf.set_conf_threshold(conf);
                     match infer_jpeg_frame(&jpeg_base64, inf) {
                         Ok((boxes, inference_ms)) => {
-                            let boxes = infer_tracker.update(boxes);
+                            let boxes = infer_tracker.update(boxes, conf);
                             let count = boxes.len();
                             send_event(&Event::Detection {
                                 boxes,

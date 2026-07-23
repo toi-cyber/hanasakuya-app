@@ -131,10 +131,12 @@ impl OnnxInference {
         let output_shape: Vec<usize> = shape.iter().map(|&d| d as usize).collect();
         eprintln!("[inference] Output: {:?}, {}ms", output_shape, inference_ms);
 
+        // ヒステリシス: 既存トラック維持用に低い閾値で候補を多く出す
+        // トラッカー側で新規トラック作成には元の閾値を適用する
         let boxes = postprocess::process_output(
             data,
             &output_shape,
-            self.conf_threshold,
+            self.conf_threshold * 0.5,
             self.iou_threshold,
         );
 

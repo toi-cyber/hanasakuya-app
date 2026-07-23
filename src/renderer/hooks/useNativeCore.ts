@@ -96,6 +96,10 @@ export function useNativeCore() {
   const consecutiveBlackFramesRef = useRef(0);
   // 送信フレーム数カウント（診断ログ用）
   const framesSentRef = useRef(0);
+  // OpenCV直接キャプチャモード（黒フレーム検出時に自動切り替え）
+  const useOpenCVRef = useRef(false);
+  const selectedDeviceIdRef = useRef('');
+  const camerasRef = useRef<{ id: string; name: string }[]>([]);
 
   // レンダラー側ログをUIログビューアーへ追加
   const addLog = useCallback((msg: string) => {
@@ -104,6 +108,37 @@ export function useNativeCore() {
     setState((s) => ({ ...s, logs: [...s.logs.slice(-199), line] }));
     window.logger?.forwardLog(line);
   }, []);
+
+  // ブラウザキャプチャ → OpenCV直接キャプチャに切り替える
+  const switchToOpenCV = useCallback(() => {
+    // ブラウザ側のキャプチャを停止
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    inferPendingRef.current = false;
+
+    // カメラのOpenCVインデックスを特定（列挙順 = OpenCVインデックス）
+    const deviceId = selectedDeviceIdRef.current;
+    const cameras = camerasRef.current;
+    const cameraIndex = cameras.findIndex((c) => c.id === deviceId);
+
+    if (cameraIndex < 0) {
+      addLog('[OpenCV] カメラインデックスが見つかりません');
+      return;
+    }
+
+    useOpenCVRef.current = true;
+    addLog(`[OpenCV] Camera ${cameraIndex} で直接キャプチャを開始します`);
+    window.coreApi.send({ cmd: 'start', device_id: cameraIndex });
+  }, [addLog]);
 
   // フレームを canvas → JPEG → Rust へ送信（インターバルから呼ばれる）
   // キャプチャーボードのGPUオーバーレイ問題への対策:
@@ -184,6 +219,12 @@ export function useNativeCore() {
         if (consecutiveBlackFramesRef.current <= 3 || consecutiveBlackFramesRef.current % 30 === 0) {
           addLog(`[フレーム] 黒フレーム検出 (輝度=${meanBrightness.toFixed(1)}, ${method}) → 取得方法を切り替えます`);
         }
+        // 10フレーム連続黒 → OpenCV直接キャプチャに自動切り替え
+        if (consecutiveBlackFramesRef.current >= 10) {
+          addLog('[フレーム] 黒フレーム継続 → OpenCV直接キャプチャに切り替えます');
+          switchToOpenCV();
+          return;
+        }
         useImageCaptureRef.current = usedGrabFrame ? false : null;
         imageCaptureRef.current = null;
         inferPendingRef.current = false;
@@ -205,7 +246,7 @@ export function useNativeCore() {
       inferPendingRef.current = false;
       console.error('[captureFrame] Error:', e);
     }
-  }, [addLog]);
+  }, [addLog, switchToOpenCV]);
 
   useEffect(() => {
     window.coreApi.onEvent((event: any) => {
@@ -349,6 +390,7 @@ export function useNativeCore() {
         addLog(`[カメラ列挙]   カメラ${i + 1}: "${c.name}"`);
       });
 
+      camerasRef.current = cameras;
       setState((s) => ({ ...s, cameras }));
     } catch (e: any) {
       addLog(`[カメラ列挙] enumerateDevices 失敗: ${e?.name}: ${e?.message}`);
@@ -365,6 +407,9 @@ export function useNativeCore() {
     grabFrameFailCountRef.current = 0;
     fpsRef.current = { frames: 0, lastTime: Date.now(), fps: 0 };
     framesSentRef.current = 0;
+    useOpenCVRef.current = false;
+    consecutiveBlackFramesRef.current = 0;
+    selectedDeviceIdRef.current = deviceId;
     try {
       const constraints: MediaStreamConstraints = {
         video: deviceId
@@ -400,6 +445,10 @@ export function useNativeCore() {
     useImageCaptureRef.current = null;
     imageCaptureRef.current = null;
     grabFrameFailCountRef.current = 0;
+    if (useOpenCVRef.current) {
+      window.coreApi.send({ cmd: 'stop' });
+      useOpenCVRef.current = false;
+    }
     if (captureIntervalRef.current) {
       clearInterval(captureIntervalRef.current);
       captureIntervalRef.current = null;

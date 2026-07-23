@@ -168,19 +168,28 @@ export default function DetectionScreen() {
         {/* Camera tab */}
         <div className={`flex-1 relative ${activeTab !== 'camera' ? 'hidden' : ''}`}>
         {/* video/canvas は常時 DOM に置く（startDetection 時点で ref が必要） */}
+        {/* ブラウザ getUserMedia によるプレビュー */}
         <video
           ref={core.videoRef}
           autoPlay
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ display: started ? 'block' : 'none' }}
+          style={{ display: started && !frameJpeg ? 'block' : 'none' }}
           onLoadedMetadata={(e) => {
             const v = e.target as HTMLVideoElement;
             setImageSize({ width: v.videoWidth, height: v.videoHeight });
           }}
         />
         <canvas ref={core.canvasRef} style={{ display: 'none' }} />
+        {/* OpenCV直接キャプチャ時のプレビュー */}
+        {started && frameJpeg && (
+          <img
+            src={`data:image/jpeg;base64,${frameJpeg}`}
+            className="absolute inset-0 w-full h-full object-cover"
+            alt="camera preview"
+          />
+        )}
 
         {/* 待機画面 */}
         {!started && (

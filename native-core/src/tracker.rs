@@ -24,8 +24,8 @@ impl Tracker {
     }
 
     /// 検出結果（track_id=0）を受け取り、各ボックスにtrack_idを付与して返す。
-    /// 内部のトラック一覧を更新する。
-    pub fn update(&mut self, mut detections: Vec<DetectionBox>) -> Vec<DetectionBox> {
+    /// conf_threshold: 新規トラック作成に必要な最低信頼度（既存トラックはこれ以下でも維持）
+    pub fn update(&mut self, mut detections: Vec<DetectionBox>, conf_threshold: f64) -> Vec<DetectionBox> {
         let n_det = detections.len();
         let n_trk = self.tracks.len();
 
@@ -67,9 +67,9 @@ impl Tracker {
             }
         }
 
-        // マッチしなかった検出は新規トラックとして登録
+        // マッチしなかった検出は新規トラックとして登録（信頼度が閾値以上の場合のみ）
         for (di, maybe_ti) in matched_track.iter().enumerate() {
-            if maybe_ti.is_none() {
+            if maybe_ti.is_none() && detections[di].confidence >= conf_threshold {
                 let id = self.next_id;
                 self.next_id += 1;
                 detections[di].track_id = id;
@@ -79,6 +79,16 @@ impl Tracker {
 
         // MAX_MISSを超えたトラックを削除
         self.tracks.retain(|t| t.misses <= MAX_MISS);
+
+        // 未トラックの低信頼度検出を除外
+        detections.retain(|d| d.track_id > 0);
+
+        // 一時的に見失ったトラックも最後の位置で出力に含める（チラつき防止）
+        for track in &self.tracks {
+            if track.misses > 0 {
+                detections.push(track.bbox.clone());
+            }
+        }
 
         detections
     }
