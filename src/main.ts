@@ -71,15 +71,25 @@ function setupAutoUpdater(mainWindow: BrowserWindow) {
     });
   });
 
-  autoUpdater.on('update-downloaded', () => {
+  autoUpdater.on('update-downloaded', async () => {
     mainWindow.webContents.send('core-event', {
       event: 'update',
       status: 'ready',
     });
-    setTimeout(() => {
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'アップデート完了',
+      message: '新しいバージョンがダウンロードされました。',
+      detail: '今すぐ再起動してアップデートを適用しますか？\n「次回起動時」を選ぶと、次にアプリを開いたときに自動で適用されます。',
+      buttons: ['今すぐ再起動', '次回起動時に適用'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) {
       core.stop();
       autoUpdater.quitAndInstall();
-    }, 2000);
+    }
+    // response === 1: autoInstallOnAppQuit = true なので次回終了→起動時に適用される
   });
 
   // 起動時にも自動チェック
