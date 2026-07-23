@@ -23,6 +23,13 @@ export default function DetectionScreen() {
     }
   }, [core.ready]);
 
+  // カメラの抜き差しを検知して自動で再列挙
+  useEffect(() => {
+    const handler = () => core.listCameras();
+    navigator.mediaDevices.addEventListener('devicechange', handler);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', handler);
+  }, []);
+
   // detecting 状態に合わせて started を同期
   useEffect(() => {
     setStarted(core.detecting);
