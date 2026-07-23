@@ -432,7 +432,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
       </button>
 
       {open && (
-        <div className={`absolute bottom-0 left-full ml-2 w-72 max-h-[80vh] overflow-y-auto rounded-xl shadow-lg border ${
+        <div className={`absolute bottom-0 left-full ml-2 w-72 min-h-120 max-h-[80vh] overflow-y-auto rounded-xl shadow-lg border ${
           dark ? 'bg-[#242424] border-[#333]' : 'bg-white border-gray-200'
         } py-4 px-5 z-50 space-y-4 text-sm`}>
           {/* ヘッダー */}
@@ -466,7 +466,7 @@ function SettingsMenuButton({ dark, collapsed, settings, applySettings, cameras,
           </div>
 
           {tab === 'license' ? (
-            <License />
+            <License dark={dark} />
           ) : (<>
 
           {/* カメラ */}
