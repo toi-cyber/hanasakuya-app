@@ -90,6 +90,8 @@ export function useNativeCore() {
   const useImageCaptureRef = useRef<boolean | null>(null);
   // 黒フレーム連続カウント（キャプチャーボードのGPUオーバーレイ検出用）
   const consecutiveBlackFramesRef = useRef(0);
+  // 送信フレーム数カウント（診断ログ用）
+  const framesSentRef = useRef(0);
 
   // レンダラー側ログをUIログビューアーへ追加
   const addLog = useCallback((msg: string) => {
@@ -179,6 +181,10 @@ export function useNativeCore() {
       const jpeg_base64 = canvas.toDataURL('image/jpeg', jpegQualityRef.current).split(',')[1];
       if (!jpeg_base64) { inferPendingRef.current = false; return; }
 
+      framesSentRef.current++;
+      if (framesSentRef.current <= 3 || framesSentRef.current % 50 === 0) {
+        addLog(`[推論] フレーム送信 #${framesSentRef.current} (${canvas.width}x${canvas.height}, jpeg=${jpeg_base64.length}B, 輝度=${meanBrightness.toFixed(1)})`);
+      }
       window.coreApi.send({ cmd: 'infer_frame', jpeg_base64 });
     } catch (e) {
       inferPendingRef.current = false;
@@ -198,6 +204,9 @@ export function useNativeCore() {
         case 'detection': {
           // 推論完了 → 次フレーム送信可能
           inferPendingRef.current = false;
+          if (framesSentRef.current <= 3 || framesSentRef.current % 50 === 0) {
+            addLog(`[推論] 応答: 検出数=${event.count} 推論=${event.inference_ms}ms`);
+          }
           // FPS をレンダラー側で計算
           const c = fpsRef.current;
           c.frames++;
@@ -332,6 +341,7 @@ export function useNativeCore() {
     inferPendingRef.current = false;
     useImageCaptureRef.current = null; // キャプチャ方法を再確認（カメラ切り替え対応）
     fpsRef.current = { frames: 0, lastTime: Date.now(), fps: 0 };
+    framesSentRef.current = 0;
     try {
       const constraints: MediaStreamConstraints = {
         video: deviceId
