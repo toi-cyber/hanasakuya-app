@@ -50,7 +50,10 @@ jobs:
           Expand-Archive ort-dml.nupkg -DestinationPath ort-dml
           New-Item -ItemType Directory -Force -Path resources\lib
           Copy-Item ort-dml\runtimes\win-x64\native\onnxruntime.dll resources\lib\
-          Copy-Item ort-dml\runtimes\win-x64\native\DirectML.dll resources\lib\
+          # DirectML.dll は別パッケージから取得（ORT 1.24.2 で同梱されなくなった）
+          Invoke-WebRequest "https://www.nuget.org/api/v2/package/Microsoft.DirectML/1.15.4" -OutFile directml.nupkg
+          Expand-Archive directml.nupkg -DestinationPath directml
+          Copy-Item directml\bin\x64-win\DirectML.dll resources\lib\
 
       - name: Build Rust core
         shell: cmd
