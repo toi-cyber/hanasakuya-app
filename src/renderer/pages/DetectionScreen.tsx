@@ -232,7 +232,7 @@ export default function DetectionScreen() {
               />
             )}
             <div className="absolute top-4 right-4 flex flex-col gap-2">
-              <StatChip label="検出" value={`${detection?.count ?? 0}`} highlight dark={dark} />
+              <StatChip label="検出" value={`${detection?.count ?? 0}`} highlight dark={dark} large />
               <StatChip label="推論" value={`${detection?.inferenceMs ?? 0}ms`} dark={dark} />
               <StatChip label="FPS" value={`${(detection?.fps ?? 0).toFixed(1)}`} dark={dark} />
             </div>
@@ -337,13 +337,13 @@ function Label({ text, children, dark }: { text: string; children: React.ReactNo
   );
 }
 
-function StatChip({ label, value, highlight = false, dark }: { label: string; value: string; highlight?: boolean; dark: boolean }) {
+function StatChip({ label, value, highlight = false, dark, large = false }: { label: string; value: string; highlight?: boolean; dark: boolean; large?: boolean }) {
   return (
-    <div className={`${dark ? 'bg-black/50' : 'bg-white/80'} backdrop-blur-sm rounded-lg px-3 py-1.5 text-right min-w-20`}>
-      <div className={`text-lg font-bold leading-tight ${highlight ? 'text-sakura-400' : dark ? 'text-white' : 'text-gray-800'}`}>
+    <div className={`${dark ? 'bg-black/50' : 'bg-white/80'} backdrop-blur-sm rounded-lg ${large ? 'px-8 py-5' : 'px-3 py-1.5'} text-right ${large ? 'min-w-36' : 'min-w-20'}`}>
+      <div className={`${large ? 'text-7xl' : 'text-lg'} font-bold leading-tight ${highlight ? 'text-sakura-400' : dark ? 'text-white' : 'text-gray-800'}`}>
         {value}
       </div>
-      <div className={`text-[10px] ${dark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</div>
+      <div className={`${large ? 'text-sm' : 'text-[10px]'} ${dark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</div>
     </div>
   );
 }
