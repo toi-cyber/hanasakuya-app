@@ -8,6 +8,8 @@ declare global {
       rendererReady: () => void;
       openVideoDialog: () => Promise<string | null>;
       saveVideoDialog: () => Promise<string | null>;
+      saveRecordingDialog: () => Promise<string | null>;
+      saveRecordingFile: (filePath: string, buffer: ArrayBuffer) => Promise<{ success: boolean; error?: string }>;
       checkForUpdate: () => void;
       downloadUpdate: () => void;
       installUpdate: () => void;
@@ -50,6 +52,8 @@ interface CoreState {
   video: VideoState;
   update: UpdateState;
   logs: string[];
+  recording: boolean;
+  recordingDuration: number;
 }
 
 const initialVideoState: VideoState = {
@@ -72,6 +76,8 @@ export function useNativeCore() {
     video: initialVideoState,
     update: { status: 'idle' },
     logs: [],
+    recording: false,
+    recordingDuration: 0,
   });
 
   // カメラ関連 refs
@@ -100,6 +106,11 @@ export function useNativeCore() {
   const useOpenCVRef = useRef(false);
   const selectedDeviceIdRef = useRef('');
   const camerasRef = useRef<{ id: string; name: string }[]>([]);
+  // 録画関連 refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef(0);
 
   // レンダラー側ログをUIログビューアーへ追加
   const addLog = useCallback((msg: string) => {
@@ -445,6 +456,15 @@ export function useNativeCore() {
     useImageCaptureRef.current = null;
     imageCaptureRef.current = null;
     grabFrameFailCountRef.current = 0;
+    // 録画中なら停止
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
     if (useOpenCVRef.current) {
       window.coreApi.send({ cmd: 'stop' });
       useOpenCVRef.current = false;
@@ -462,6 +482,87 @@ export function useNativeCore() {
     }
     setState((s) => ({ ...s, detecting: false, lastDetection: null }));
   }, []);
+
+  // 録画を開始（ブラウザキャプチャモードのみ）
+  const startRecording = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream) {
+      addLog('[録画] ブラウザキャプチャモードでのみ録画可能です');
+      return;
+    }
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : 'video/webm';
+
+    try {
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // タイマー停止
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setState((s) => ({ ...s, recording: false, recordingDuration: 0 }));
+
+        const chunks = recordedChunksRef.current;
+        if (chunks.length === 0) {
+          addLog('[録画] データがありません');
+          return;
+        }
+
+        const blob = new Blob(chunks, { type: mimeType });
+        addLog(`[録画] ${(blob.size / 1024 / 1024).toFixed(1)} MB のデータを保存します...`);
+
+        const filePath = await window.coreApi.saveRecordingDialog();
+        if (!filePath) {
+          addLog('[録画] 保存がキャンセルされました');
+          return;
+        }
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await window.coreApi.saveRecordingFile(filePath, arrayBuffer);
+        if (result.success) {
+          addLog(`[録画] 保存完了: ${filePath}`);
+        } else {
+          addLog(`[録画] 保存失敗: ${result.error}`);
+        }
+      };
+
+      recorder.start(1000); // 1秒ごとにチャンク生成
+      mediaRecorderRef.current = recorder;
+      recordingStartTimeRef.current = Date.now();
+      setState((s) => ({ ...s, recording: true, recordingDuration: 0 }));
+
+      // 録画時間を1秒ごとに更新
+      recordingTimerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+        setState((s) => ({ ...s, recordingDuration: elapsed }));
+      }, 1000);
+
+      addLog('[録画] 開始');
+    } catch (e: any) {
+      addLog(`[録画] 開始失敗: ${e?.message}`);
+    }
+  }, [addLog]);
+
+  // 録画を停止
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+      mediaRecorderRef.current = null;
+      addLog('[録画] 停止');
+    }
+  }, [addLog]);
 
   const setThreshold = useCallback((value: number) => {
     window.coreApi.send({ cmd: 'set_threshold', value });
@@ -530,6 +631,8 @@ export function useNativeCore() {
     listCameras,
     startDetection,
     stopDetection,
+    startRecording,
+    stopRecording,
     setThreshold,
     setJpegQuality,
     setInferSize,

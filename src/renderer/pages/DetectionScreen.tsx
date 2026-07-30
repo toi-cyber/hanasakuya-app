@@ -236,12 +236,34 @@ export default function DetectionScreen() {
               <StatChip label="推論" value={`${detection?.inferenceMs ?? 0}ms`} dark={dark} />
               <StatChip label="FPS" value={`${(detection?.fps ?? 0).toFixed(1)}`} dark={dark} />
             </div>
-            <button
-              onClick={handleStop}
-              className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-sakura-500 hover:bg-sakura-600 text-white rounded-lg px-6 py-2 text-sm font-medium transition-colors"
-            >
-              ⏸ 停止
-            </button>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3">
+              {/* 録画ボタン: 録画中のみ停止ボタンを表示 */}
+              {!core.recording ? (
+                <button
+                  onClick={() => core.startRecording()}
+                  title="録画開始"
+                  className={`${dark ? 'bg-black/50 hover:bg-black/70' : 'bg-white/80 hover:bg-white/90'} backdrop-blur-sm rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5`}
+                >
+                  <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
+                  <span className={dark ? 'text-white' : 'text-gray-800'}>録画</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => core.stopRecording()}
+                  title="録画停止"
+                  className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5"
+                >
+                  <span className="w-3 h-3 rounded-sm bg-white inline-block animate-pulse" />
+                  <span>録画停止 {formatDuration(core.recordingDuration)}</span>
+                </button>
+              )}
+              <button
+                onClick={handleStop}
+                className="bg-sakura-500 hover:bg-sakura-600 text-white rounded-lg px-6 py-2 text-sm font-medium transition-colors"
+              >
+                ⏸ 検出停止
+              </button>
+            </div>
           </>
         )}
 
@@ -274,6 +296,12 @@ export default function DetectionScreen() {
 }
 
 
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 function MenuItem({ icon, label, active, onClick, collapsed, dark }: { icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean; dark: boolean }) {
   return (

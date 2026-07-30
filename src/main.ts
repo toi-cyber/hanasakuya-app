@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, dialog, session } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import { autoUpdater } from 'electron-updater';
 import { CoreProcess } from './main/coreProcess';
@@ -165,6 +166,25 @@ const createWindow = () => {
       filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
     });
     return result.canceled ? null : result.filePath;
+  });
+
+  ipcMain.handle('dialog-save-recording', async () => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: '録画の保存先を選択',
+      defaultPath: `recording_${timestamp}.webm`,
+      filters: [{ name: 'WebM Video', extensions: ['webm'] }],
+    });
+    return result.canceled ? null : result.filePath;
+  });
+
+  ipcMain.handle('save-recording-file', async (_event, filePath: string, buffer: Buffer) => {
+    try {
+      fs.writeFileSync(filePath, buffer);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
   });
 
   ipcMain.on('renderer-ready', () => {

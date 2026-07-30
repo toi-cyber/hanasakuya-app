@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('coreApi', {
   rendererReady: () => ipcRenderer.send('renderer-ready'),
   openVideoDialog: () => ipcRenderer.invoke('dialog-open-video'),
   saveVideoDialog: () => ipcRenderer.invoke('dialog-save-video'),
+  saveRecordingDialog: () => ipcRenderer.invoke('dialog-save-recording'),
+  saveRecordingFile: (filePath: string, buffer: ArrayBuffer) =>
+    ipcRenderer.invoke('save-recording-file', filePath, Buffer.from(buffer)),
   checkForUpdate: () => ipcRenderer.send('check-for-update'),
   downloadUpdate: () => ipcRenderer.send('download-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
