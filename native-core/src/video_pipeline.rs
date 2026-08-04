@@ -10,6 +10,7 @@ use opencv::core as cv_core;
 
 use oocyte_core::camera::CameraCapture;
 use oocyte_core::inference::{OnnxInference, INPUT_SIZE};
+use oocyte_core::tracker::Tracker;
 use crate::{send_event, Event};
 
 pub struct VideoPipeline {
@@ -34,7 +35,7 @@ impl VideoPipeline {
         let running_clone = running.clone();
 
         thread::spawn(move || {
-            if let Err(e) = run_video_pipeline(&input_path, &output_path, inference, &running_clone) {
+            if let Err(e) = run_video_pipeline(&input_path, &output_path, conf_threshold, inference, &running_clone) {
                 send_event(&Event::VideoError { message: e });
             }
         });
@@ -50,6 +51,7 @@ impl VideoPipeline {
 fn run_video_pipeline(
     input_path: &str,
     output_path: &str,
+    conf_threshold: f64,
     mut inference: OnnxInference,
     running: &AtomicBool,
 ) -> Result<(), String> {
@@ -72,6 +74,7 @@ fn run_video_pipeline(
     eprintln!("[video] Starting frame loop");
     let start_time = Instant::now();
     let mut frame_num: u64 = 0;
+    let mut tracker = Tracker::new();
 
     loop {
         if !running.load(Ordering::Relaxed) {
@@ -101,26 +104,51 @@ fn run_video_pipeline(
             vec![]
         };
 
-        // bboxをフレームに描画
+        // Tracker でトラックID付与（リアルタイムと同じ処理）
+        let boxes = tracker.update(boxes, conf_threshold);
+
+        // bboxをフレームに描画（フロントエンドのDetectionOverlayと同じスタイル）
+        // ピンク色の円 + #track_id ラベル
+        let pink = cv_core::Scalar::new(153.0, 72.0, 236.0, 255.0); // BGR: #ec4899
+        let white = cv_core::Scalar::new(255.0, 255.0, 255.0, 255.0);
         let mut annotated = frame.clone();
         for b in &boxes {
             let x1 = (b.x1 * width as f64) as i32;
             let y1 = (b.y1 * height as f64) as i32;
             let x2 = (b.x2 * width as f64) as i32;
             let y2 = (b.y2 * height as f64) as i32;
-            let rect = cv_core::Rect::new(x1, y1, (x2 - x1).max(1), (y2 - y1).max(1));
-            let color = cv_core::Scalar::new(0.0, 255.0, 0.0, 255.0);
-            imgproc::rectangle(&mut annotated, rect, color, 2, imgproc::LINE_8, 0).ok();
-            let label = format!("{:.0}%", b.confidence * 100.0);
+            let cx = (x1 + x2) / 2;
+            let cy = (y1 + y2) / 2;
+            let radius = ((x2 - x1) + (y2 - y1)) / 4;
+
+            // 円を描画
+            imgproc::circle(&mut annotated, cv_core::Point::new(cx, cy), radius, pink, 3, imgproc::LINE_AA, 0).ok();
+
+            // ラベル背景（角丸の代わりに塗りつぶし矩形）
+            let label = format!("#{}", b.track_id);
+            let font_scale = 0.6;
+            let thickness = 2;
+            let mut baseline = 0;
+            let text_size = imgproc::get_text_size(&label, imgproc::FONT_HERSHEY_SIMPLEX, font_scale, thickness, &mut baseline).unwrap_or_default();
+            let label_w = text_size.width + 8;
+            let label_h = text_size.height + 8;
+            let label_x = cx - label_w / 2;
+            let label_y = cy - radius - label_h - 4;
+
+            // ピンク背景
+            let bg_rect = cv_core::Rect::new(label_x, label_y, label_w, label_h);
+            imgproc::rectangle(&mut annotated, bg_rect, pink, -1, imgproc::LINE_8, 0).ok();
+
+            // 白テキスト
             imgproc::put_text(
                 &mut annotated,
                 &label,
-                cv_core::Point::new(x1, (y1 - 6).max(0)),
+                cv_core::Point::new(label_x + 4, label_y + label_h - 4),
                 imgproc::FONT_HERSHEY_SIMPLEX,
-                0.5,
-                color,
-                1,
-                imgproc::LINE_8,
+                font_scale,
+                white,
+                thickness,
+                imgproc::LINE_AA,
                 false,
             ).ok();
         }
