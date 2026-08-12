@@ -65,6 +65,26 @@ export default function DetectionScreen() {
   const detection = core.lastDetection;
   const frameJpeg = detection?.frameJpeg;
 
+  // 直近10フレームのカウント履歴で Stable/Unstable を判定
+  const countHistoryRef = useRef<number[]>([]);
+  const prevDetectionRef = useRef<typeof detection>(null);
+  const currentCount = detection?.count ?? 0;
+  if (detection && detection !== prevDetectionRef.current) {
+    prevDetectionRef.current = detection;
+    const hist = countHistoryRef.current;
+    hist.push(currentCount);
+    if (hist.length > 10) hist.shift();
+  }
+
+  const avgConfidence = detection && detection.boxes.length > 0
+    ? detection.boxes.reduce((sum, b) => sum + b.confidence, 0) / detection.boxes.length
+    : null;
+
+  const isStable = countHistoryRef.current.length >= 10
+    && countHistoryRef.current.every(c => c === countHistoryRef.current[0]);
+  const hasDetection = currentCount > 0;
+  const statusLabel = !hasDetection ? '未検出' : isStable ? '安定' : '検出中';
+
   // テーマカラー
   const t = {
     bg: dark ? 'bg-[#1a1a1a]' : 'bg-gray-100',
@@ -232,7 +252,8 @@ export default function DetectionScreen() {
               />
             )}
             <div className="absolute top-4 right-4 flex flex-col gap-2">
-              <StatChip label="検出" value={`${detection?.count ?? 0}`} highlight dark={dark} large />
+              <StatChip label="Detected" value={isStable && hasDetection ? `${currentCount}` : '-'} highlight={isStable && hasDetection} dark={dark} large />
+              <StatChip label="Status" value={statusLabel} dark={dark} />
               <StatChip label="推論" value={`${detection?.inferenceMs ?? 0}ms`} dark={dark} />
               <StatChip label="FPS" value={`${(detection?.fps ?? 0).toFixed(1)}`} dark={dark} />
             </div>
