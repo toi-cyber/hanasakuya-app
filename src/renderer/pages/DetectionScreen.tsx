@@ -83,7 +83,7 @@ export default function DetectionScreen() {
   const isStable = countHistoryRef.current.length >= 10
     && countHistoryRef.current.every(c => c === countHistoryRef.current[0]);
   const hasDetection = currentCount > 0;
-  const statusLabel = !hasDetection ? '未検出' : isStable ? '安定' : '検出中';
+  const statusLabel = !hasDetection ? '—' : isStable ? 'Stable' : '—';
 
   // テーマカラー
   const t = {
